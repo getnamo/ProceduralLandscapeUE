@@ -96,6 +96,12 @@ struct FClipMapMeshElement
 	UPROPERTY(Transient)
 		UMaterialInstanceDynamic* LayerMatDyn = nullptr;
 
+
+
+	//Data Exchange between World | Did we already bind this RT as an external heightmap ?
+	UPROPERTY(Transient)
+		UTextureRenderTarget2D* HeightMapFromLastSourceElement = nullptr;
+
 	
 
 	UPROPERTY(Transient)
@@ -280,7 +286,6 @@ struct FSpawnableMesh
 	~FSpawnableMesh();
 };
 
-
 UCLASS()
 class PROCEDURALLANDSCAPE_API AGeometryClipMapWorld : public AActor
 {
@@ -307,6 +312,33 @@ public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
+	//////////////////////////////////////////
+	// Data sharing
+	
+	/*Allow other actors to access the landscape data, i.e ocean getting landscape heightmap*/
+	UFUNCTION(BlueprintCallable)
+		FVector Get_LOD_RingLocation(int LOD);
+
+	/*Send our data updates TO those other world*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dependencies")
+		AGeometryClipMapWorld* DataReceiver;
+
+	/*Receive data updates FROM those other world*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dependencies")
+		AGeometryClipMapWorld* DataSource;
+
+	/*A ring of LOD 5 in receiver will use the LOD 5 + LOD_Offset_FromReceiverToSource of source*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dependencies")
+		int LOD_Offset_FromReceiverToSource=0;
+
+	/*Update Data that will not change regularly: ring dimensions, vertices number,...*/
+	void UpdateStaticDataFor(AGeometryClipMapWorld* Source_);
+	/*Update Location */
+	void ReceiveExternalDataUpdate(AGeometryClipMapWorld* Source, int LOD_, FVector NewLocation);
+
+	
+	//////////////////////////////////////////
+	
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ClipMap Settings")
 		float UpdateRatePerSecond = 20.0f;
@@ -460,9 +492,5 @@ protected:
 	int DrawCall_Spawnables_count = 0;
 	UStaticMesh* Spawnable_Stopped = nullptr; 
 	
-
-	//TArray<FVector> CollisionMesh_ReferenceVertices;
-	//TArray<int32> CollisionMesh_ReferenceIndices;
-
 
 };

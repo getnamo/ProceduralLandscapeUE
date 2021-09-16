@@ -130,6 +130,8 @@ void AGeometryClipMapWorld::Setup()
 			Spawnable.CleanUp();
 		}
 
+		
+
 		rebuild = false;
 		GenerateCollision_last = GenerateCollision;
 		VerticalRangeMeters_last = VerticalRangeMeters;
@@ -180,6 +182,94 @@ void AGeometryClipMapWorld::Tick(float DeltaTime)
 	RTUpdate.BeginFence();
 }
 
+FVector AGeometryClipMapWorld::Get_LOD_RingLocation(int LOD)
+{
+	if (Meshes.Num() > 0 && LOD >= 0 && LOD < Meshes.Num())
+	{		
+		return Meshes[Meshes.Num() - 1 - LOD].Location;
+	}
+	return FVector();
+}
+
+void AGeometryClipMapWorld::UpdateStaticDataFor(AGeometryClipMapWorld* Source_)
+{
+	if(!Source_ || Source_!=DataSource || Source_ && Source_->GetMeshNum()==0)
+		return;
+
+	int SourceMaxLOD = Source_->Level-1;
+
+	for(FClipMapMeshElement& el : Meshes)
+	{
+		int el_LOD = Level-1-el.Level;
+
+		if (el.MatDyn)
+		{
+			int SourceLOD_tolookFor = el_LOD + LOD_Offset_FromReceiverToSource > SourceMaxLOD ? SourceMaxLOD : el_LOD+LOD_Offset_FromReceiverToSource;
+
+			for(int i=SourceLOD_tolookFor; i < Source_->Level;i++)
+			{
+			
+				if(Source_->Level-1 - i < Source_->GetMeshNum())
+				{
+					FClipMapMeshElement& ClipMMesh = Source_->GetMesh(Source_->Level-1 - i);
+
+					if(ClipMMesh.Mesh->IsMeshSectionVisible(0)||ClipMMesh.Mesh->IsMeshSectionVisible(1))
+					{
+						int CacheResExt = ClipMMesh.HeightMap->SizeX;
+
+						if(el.HeightMapFromLastSourceElement && el.HeightMapFromLastSourceElement==ClipMMesh.HeightMap)
+						{
+							el.MatDyn->SetVectorParameterValue("Ext_RingLocation", ClipMMesh.Location);
+						}
+						else
+						{
+							el.MatDyn->SetVectorParameterValue("Ext_RingLocation", ClipMMesh.Location);
+							el.MatDyn->SetScalarParameterValue("Ext_MeshScale", (Source_->N - 1) * ClipMMesh.GridSpacing * CacheResExt / (CacheResExt - 1));
+							el.MatDyn->SetScalarParameterValue("Ext_N", Source_->N);
+							el.MatDyn->SetScalarParameterValue("Ext_LocalGridScaling", ClipMMesh.GridSpacing);
+							el.MatDyn->SetScalarParameterValue("Ext_CacheRes", CacheResExt);
+
+							el.MatDyn->SetTextureParameterValue("Ext_HeightMap", ClipMMesh.HeightMap);
+							el.MatDyn->SetTextureParameterValue("Ext_NormalMap", ClipMMesh.NormalMap);
+						}
+						
+
+						break;
+					}
+
+					
+				}
+
+			}
+		
+		}
+	}
+}
+
+void AGeometryClipMapWorld::ReceiveExternalDataUpdate(AGeometryClipMapWorld* Source, int LOD_, FVector NewLocation)
+{
+	if(Source && DataSource && Source==DataSource && Meshes.Num()>0)
+	{
+		int SourceMaxLOD = Source->Level-1;
+
+		for (FClipMapMeshElement& el : Meshes)
+		{
+			int el_LOD = Level - 1 - el.Level;
+
+			if (el.MatDyn)
+			{
+				int SourceLOD_tolookFor = el_LOD + LOD_Offset_FromReceiverToSource > SourceMaxLOD ? SourceMaxLOD : el_LOD + LOD_Offset_FromReceiverToSource;
+
+				if(SourceLOD_tolookFor == LOD_)
+				{
+					el.MatDyn->SetVectorParameterValue("Ext_RingLocation", NewLocation);				
+				}
+
+			}
+		}
+	}
+}
+
 #if WITH_EDITOR
 void AGeometryClipMapWorld::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
@@ -189,13 +279,11 @@ void AGeometryClipMapWorld::PostEditChangeProperty(FPropertyChangedEvent& Proper
 	{
 		FString PropName = PropertyChangedEvent.Property->GetName();
 
-		if(PropName == TEXT("Spawnables"))
+		if(PropName == TEXT("Spawnables") || PropName == TEXT("RegionWorldDimension")|| PropName == TEXT("NumberOfInstanceToComputePerRegion")|| PropName == TEXT("AlignMaxAngle")|| PropName == TEXT("Mesh")|| PropName == TEXT("AltitudeRange")|| PropName == TEXT("ScaleRange")|| PropName == TEXT("GroundSlopeAngle"))
 		{
-			//Spawnables.SpawnablesElemReadToProcess.Empty();
-			for (FSpawnableMesh& Spawnable : Spawnables)
-			{
-				Spawnable.CleanUp();
-			}
+			//UE_LOG(LogTemp,Warning,TEXT("PostEditChangeProperty rebuildVegetationOnly"));
+			rebuildVegetationOnly=true;
+			
 		}
 		else if(PropName == TEXT("N_Select") || PropName == TEXT("Level")|| PropName == TEXT("ClipMapCacheIntraVerticesTexel")|| PropName == TEXT("GridSpacing")|| PropName == TEXT("WorldPresentation")|| PropName == TEXT("LandDataLayers"))
 		{
@@ -594,7 +682,7 @@ float AGeometryClipMapWorld::HeightToClosestCollisionMesh()
 	{
 		FProcMeshSection* Section = ClosestMesh->GetProcMeshSection(0);
 
-		return (Section->SectionLocalBox.GetCenter()-CamLocation).Z;
+		return (Section->SectionLocalBox.GetCenter()+GetActorLocation().Z*FVector(0.f,0.f,1.f) -CamLocation).Z;
 	}
 
 	return -1.f;
@@ -680,7 +768,7 @@ void AGeometryClipMapWorld::UpdateClipMap()
 
 					FVector CompLoc = CamLocation/(2.0*Elem.GridSpacing);
 
-					FVector LocRef = 2.0*Elem.GridSpacing*FVector(FMath::Floor(CompLoc.X),FMath::Floor(CompLoc.Y),0.f)+Elem.Location.Z*FVector(0.f,0.f,1);
+					FVector LocRef = 2.0*Elem.GridSpacing*FVector(FMath::Floor(CompLoc.X),FMath::Floor(CompLoc.Y),0.f)+GetActorLocation().Z *FVector(0.f,0.f,1);
 
 					FVector Diff = (CamLocation-LocRef);//Elem.GridSpacing;
 
@@ -717,6 +805,9 @@ void AGeometryClipMapWorld::UpdateClipMap()
 						Elem.I_Mesh->SetWorldLocation(LocRef + ToLoc, false, nullptr, ETeleportType::TeleportPhysics);
 						Elem.I_Mesh->MarkRenderTransformDirty();
 					}
+
+					//if(DataReceiver)
+					//	DataReceiver->ReceiveExternalDataUpdate(this,Level-1-Elem.Level,LocRef + ToLoc);
 					
 
 					if(EnableCaching)
@@ -834,6 +925,10 @@ void AGeometryClipMapWorld::UpdateClipMap()
 			
 		}
 	}
+
+	
+	if (DataReceiver)
+		DataReceiver->UpdateStaticDataFor(this);
 }
 
 void AGeometryClipMapWorld::UpdateCollisionMesh()
@@ -1159,7 +1254,16 @@ void AGeometryClipMapWorld::ProcessSpawnablePending()
 			{
 				TArray<FTransform>& T = InstancesT[i];
 				T.SetNum(Spawn.NumInstancePerHIM[i], false);
-			}		
+			}
+
+			/*
+			if(Spawn.InstanceIndexToHIMIndex.Num()!=NumOfVertex)
+			{
+				UE_LOG(LogTemp,Warning,TEXT("Runtime editing of vegetation failed : Spawn.InstanceIndexToHIMIndex.Num() %d !=NumOfVertex"),Spawn.InstanceIndexToHIMIndex.Num(),NumOfVertex);
+				continue;
+			}
+			*/
+				
 
 
 			ParallelFor(NumOfVertex, [&](int32 k)
@@ -1951,6 +2055,9 @@ void AGeometryClipMapWorld::InitiateWorld()
 		Meshes.Add(NewElem);
 
 	}
+	
+	if (DataReceiver)
+		DataReceiver->UpdateStaticDataFor(this);
 }
 
 
