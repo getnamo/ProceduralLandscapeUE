@@ -191,27 +191,45 @@ FVector AGeometryClipMapWorld::Get_LOD_RingLocation(int LOD)
 	return FVector();
 }
 
+UTextureRenderTarget2D* AGeometryClipMapWorld::Get_LOD_HeightMap(int LOD)
+{
+	if (Meshes.Num() > 0 && LOD >= 0 && LOD < Meshes.Num())
+	{
+		return Meshes[Meshes.Num() - 1 - LOD].HeightMap;
+	}
+	return nullptr;
+}
+
+UTextureRenderTarget2D* AGeometryClipMapWorld::Get_LOD_NormalMap(int LOD)
+{
+	if (Meshes.Num() > 0 && LOD >= 0 && LOD < Meshes.Num())
+	{
+		return Meshes[Meshes.Num() - 1 - LOD].NormalMap;
+	}
+	return nullptr;
+}
+
 void AGeometryClipMapWorld::UpdateStaticDataFor(AGeometryClipMapWorld* Source_)
 {
 	if(!Source_ || Source_!=DataSource || Source_ && Source_->GetMeshNum()==0)
 		return;
 
-	int SourceMaxLOD = Source_->Level-1;
+	int SourceMaxLOD = Source_->LOD_Num-1;
 
 	for(FClipMapMeshElement& el : Meshes)
 	{
-		int el_LOD = Level-1-el.Level;
+		int el_LOD = LOD_Num-1-el.Level;
 
 		if (el.MatDyn)
 		{
 			int SourceLOD_tolookFor = el_LOD + LOD_Offset_FromReceiverToSource > SourceMaxLOD ? SourceMaxLOD : el_LOD+LOD_Offset_FromReceiverToSource;
 
-			for(int i=SourceLOD_tolookFor; i < Source_->Level;i++)
+			for(int i=SourceLOD_tolookFor; i < Source_->LOD_Num;i++)
 			{
 			
-				if(Source_->Level-1 - i < Source_->GetMeshNum())
+				if(Source_->LOD_Num-1 - i < Source_->GetMeshNum())
 				{
-					FClipMapMeshElement& ClipMMesh = Source_->GetMesh(Source_->Level-1 - i);
+					FClipMapMeshElement& ClipMMesh = Source_->GetMesh(Source_->LOD_Num-1 - i);
 
 					if(ClipMMesh.Mesh->IsMeshSectionVisible(0)||ClipMMesh.Mesh->IsMeshSectionVisible(1))
 					{
@@ -250,11 +268,11 @@ void AGeometryClipMapWorld::ReceiveExternalDataUpdate(AGeometryClipMapWorld* Sou
 {
 	if(Source && DataSource && Source==DataSource && Meshes.Num()>0)
 	{
-		int SourceMaxLOD = Source->Level-1;
+		int SourceMaxLOD = Source->LOD_Num-1;
 
 		for (FClipMapMeshElement& el : Meshes)
 		{
-			int el_LOD = Level - 1 - el.Level;
+			int el_LOD = LOD_Num - 1 - el.Level;
 
 			if (el.MatDyn)
 			{
@@ -285,7 +303,7 @@ void AGeometryClipMapWorld::PostEditChangeProperty(FPropertyChangedEvent& Proper
 			rebuildVegetationOnly=true;
 			
 		}
-		else if(PropName == TEXT("N_Select") || PropName == TEXT("Level")|| PropName == TEXT("ClipMapCacheIntraVerticesTexel")|| PropName == TEXT("GridSpacing")|| PropName == TEXT("WorldPresentation")|| PropName == TEXT("LandDataLayers"))
+		else if(PropName == TEXT("VerticePerPatch") || PropName == TEXT("LOD_Num")|| PropName == TEXT("ClipMapCacheIntraVerticesTexel")|| PropName == TEXT("WorldDimensionMeters")|| PropName == TEXT("WorldPresentation")|| PropName == TEXT("LandDataLayers"))
 		{
 			rebuild=true;
 		}
@@ -299,7 +317,7 @@ void AGeometryClipMapWorld::SetN()
 {
 	int N_values[6] = {511,255,127,63,31,15};
 
-	N = N_values[(uint8)N_Select];
+	N = N_values[(uint8)VerticePerPatch];
 }
 
 bool AGeometryClipMapWorld::CanUpdateSpawnables()
@@ -731,7 +749,7 @@ void AGeometryClipMapWorld::UpdateClipMap()
 		}
 		else
 		{
-			if(Height>Elem.GridSpacing*0.4f*N/2.f || Elem.Level==Level-1)
+			if(Height>Elem.GridSpacing*0.4f*N/2.f || Elem.Level==LOD_Num-1)
 			{
 				
 				if(!Elem.IsSectionVisible(0))
@@ -1419,9 +1437,11 @@ void AGeometryClipMapWorld::InitiateWorld()
 	if(Meshes.Num()>0)
 		return;
 
-	for(int i=0; i<Level;i++)
+	GridSpacing=WorldDimensionMeters*100/(N-1);
+
+	for(int i=0; i<LOD_Num;i++)
 	{
-		int LOD = Level-1-i;
+		int LOD = LOD_Num-1-i;
 		FClipMapMeshElement NewElem;	
 
 		NewElem.Level=i;
@@ -1429,7 +1449,7 @@ void AGeometryClipMapWorld::InitiateWorld()
 
 		int LocalM = (N+1)/4;
 
-		int CacheRes = (i< Level-LOD_above_doubleCacheResolution  /*Level/2*/?2.0f:1.0f)*ClipMapCacheIntraVerticesTexel*(N-1) +1;
+		int CacheRes = (i< LOD_Num-LOD_above_doubleCacheResolution  /*Level/2*/?2.0f:1.0f)*ClipMapCacheIntraVerticesTexel*(N-1) +1;
 		//int CacheRes = ClipMapCacheIntraVerticesTexel*N;
 
 
@@ -1472,7 +1492,7 @@ void AGeometryClipMapWorld::InitiateWorld()
 
 			NewElem.I_Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
-			NewElem.I_Mesh->NumCustomDataFloats=5;			
+			NewElem.I_Mesh->NumCustomDataFloats=6;			
 			NewElem.I_Mesh->bNeverDistanceCull = true;
 			NewElem.I_Mesh->SetRelativeLocation(FVector(-NewElem.GridSpacing, -NewElem.GridSpacing, 0.f));
 			NewElem.I_Mesh->CastShadow=true;
@@ -1530,7 +1550,7 @@ void AGeometryClipMapWorld::InitiateWorld()
 			int NumI = Vertices.Num();
 			TArray<FTransform> InstanceT;
 			InstanceT.SetNum(NumI);
-			float ScaleLocal = pow(2.0,-i+Level-1);
+			float ScaleLocal = pow(2.0,-i+LOD_Num-1);
 
 			ParallelFor(NumI, [&](int32 k)
 			{
@@ -1559,6 +1579,7 @@ void AGeometryClipMapWorld::InitiateWorld()
 					CustomData.Add(UV[k].Y);
 					CustomData.Add(UV1[k].X);
 					CustomData.Add(UV1[k].Y);
+					CustomData.Add(Vertices[k].Z);
 
 					NewElem.I_Mesh->SetCustomData(Indexes[k], CustomData);
 				}
@@ -1642,7 +1663,7 @@ void AGeometryClipMapWorld::InitiateWorld()
 			int NumI = Vertices.Num();
 			TArray<FTransform> InstanceT;
 			InstanceT.SetNum(NumI);
-			float ScaleLocal = pow(2.0, -i + Level - 1);
+			float ScaleLocal = pow(2.0, -i + LOD_Num - 1);
 
 			ParallelFor(NumI, [&](int32 k)
 			{
@@ -1670,6 +1691,7 @@ void AGeometryClipMapWorld::InitiateWorld()
 					CustomData.Add(UV[k].Y);
 					CustomData.Add(UV1[k].X);
 					CustomData.Add(UV1[k].Y);
+					CustomData.Add(Vertices[k].Z);
 					NewElem.I_Mesh->SetCustomData(Indexes[k], CustomData);
 				}
 
@@ -1709,7 +1731,7 @@ void AGeometryClipMapWorld::InitiateWorld()
 			int NumI = Vertices.Num();
 			TArray<FTransform> InstanceT;
 			InstanceT.SetNum(NumI);
-			float ScaleLocal = pow(2.0, -i + Level - 1);
+			float ScaleLocal = pow(2.0, -i + LOD_Num - 1);
 
 			ParallelFor(NumI, [&](int32 k)
 			{
@@ -1737,6 +1759,7 @@ void AGeometryClipMapWorld::InitiateWorld()
 					CustomData.Add(UV[k].Y);
 					CustomData.Add(UV1[k].X);
 					CustomData.Add(UV1[k].Y);
+					CustomData.Add(Vertices[k].Z);
 					NewElem.I_Mesh->SetCustomData(Indexes[k], CustomData);
 				}
 
@@ -1773,7 +1796,7 @@ void AGeometryClipMapWorld::InitiateWorld()
 			int NumI = Vertices.Num();
 			TArray<FTransform> InstanceT;
 			InstanceT.SetNum(NumI);
-			float ScaleLocal = pow(2.0, -i + Level - 1);
+			float ScaleLocal = pow(2.0, -i + LOD_Num - 1);
 
 			ParallelFor(NumI, [&](int32 k)
 			{
@@ -1801,6 +1824,7 @@ void AGeometryClipMapWorld::InitiateWorld()
 					CustomData.Add(UV[k].Y);
 					CustomData.Add(UV1[k].X);
 					CustomData.Add(UV1[k].Y);
+					CustomData.Add(Vertices[k].Z);
 					NewElem.I_Mesh->SetCustomData(Indexes[k], CustomData);
 				}
 
@@ -1837,7 +1861,7 @@ void AGeometryClipMapWorld::InitiateWorld()
 			int NumI = Vertices.Num();
 			TArray<FTransform> InstanceT;
 			InstanceT.SetNum(NumI);
-			float ScaleLocal = pow(2.0, -i + Level - 1);
+			float ScaleLocal = pow(2.0, -i + LOD_Num - 1);
 
 			ParallelFor(NumI, [&](int32 k)
 			{
@@ -1865,6 +1889,7 @@ void AGeometryClipMapWorld::InitiateWorld()
 					CustomData.Add(UV[k].Y);
 					CustomData.Add(UV1[k].X);
 					CustomData.Add(UV1[k].Y);
+					CustomData.Add(Vertices[k].Z);
 					NewElem.I_Mesh->SetCustomData(Indexes[k], CustomData);
 				}
 
@@ -1902,7 +1927,7 @@ void AGeometryClipMapWorld::InitiateWorld()
 			int NumI = Vertices.Num();
 			TArray<FTransform> InstanceT;
 			InstanceT.SetNum(NumI);
-			float ScaleLocal = pow(2.0, -i + Level - 1);
+			float ScaleLocal = pow(2.0, -i + LOD_Num - 1);
 
 			ParallelFor(NumI, [&](int32 k)
 			{
@@ -1930,6 +1955,7 @@ void AGeometryClipMapWorld::InitiateWorld()
 					CustomData.Add(UV[k].Y);
 					CustomData.Add(UV1[k].X);
 					CustomData.Add(UV1[k].Y);
+					CustomData.Add(Vertices[k].Z);
 					NewElem.I_Mesh->SetCustomData(Indexes[k], CustomData);
 				}
 
@@ -1947,19 +1973,7 @@ void AGeometryClipMapWorld::InitiateWorld()
 		}
 			
 		
-		if (i == Level - 1)
-			NewElem.SetSectionVisible(1, false);
-		else
-			NewElem.SetSectionVisible(0, false);
-
-		// botleft
-		NewElem.SetSectionVisible(2, true);
-		// topleft
-		NewElem.SetSectionVisible(3, false);
-		// botright
-		NewElem.SetSectionVisible(4, false);
-		// topright
-		NewElem.SetSectionVisible(5, false);
+		
 		
 
 		NewElem.Config= EClipMapInteriorConfig::BotLeft;
@@ -2049,6 +2063,20 @@ void AGeometryClipMapWorld::InitiateWorld()
 				NewElem.MatDyn->SetTextureParameterValue("LayerDataMap", NewElem.LandLayers[0]);
 		}
 
+
+		if (i == LOD_Num - 1)
+			NewElem.SetSectionVisible(1, false);
+		else
+			NewElem.SetSectionVisible(0, false);
+
+		// botleft
+		NewElem.SetSectionVisible(2, true);
+		// topleft
+		NewElem.SetSectionVisible(3, false);
+		// botright
+		NewElem.SetSectionVisible(4, false);
+		// topright
+		NewElem.SetSectionVisible(5, false);
 		
 		
 
@@ -2428,7 +2456,7 @@ void FSpawnableMesh::Initiate(AGeometryClipMapWorld* Owner_)
 		{
 			FClipMapMeshElement& Elem = Owner->GetMesh(i);
 			
-			if(Elem.GridSpacing*(Owner->N-1)/2.f>RegionWorldDimension*(3.5f + 0.1f/*margin*/))
+			if(Elem.GridSpacing*(Owner->N-1)/2.f>RegionWorldDimension*(4.f))
 			{				
 				IndexOfClipMapForCompute=i;
 				break;

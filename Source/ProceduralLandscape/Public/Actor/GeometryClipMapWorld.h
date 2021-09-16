@@ -312,32 +312,7 @@ public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
-	//////////////////////////////////////////
-	// Data sharing
-	
-	/*Allow other actors to access the landscape data, i.e ocean getting landscape heightmap*/
-	UFUNCTION(BlueprintCallable)
-		FVector Get_LOD_RingLocation(int LOD);
 
-	/*Send our data updates TO those other world*/
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dependencies")
-		AGeometryClipMapWorld* DataReceiver;
-
-	/*Receive data updates FROM those other world*/
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dependencies")
-		AGeometryClipMapWorld* DataSource;
-
-	/*A ring of LOD 5 in receiver will use the LOD 5 + LOD_Offset_FromReceiverToSource of source*/
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dependencies")
-		int LOD_Offset_FromReceiverToSource=0;
-
-	/*Update Data that will not change regularly: ring dimensions, vertices number,...*/
-	void UpdateStaticDataFor(AGeometryClipMapWorld* Source_);
-	/*Update Location */
-	void ReceiveExternalDataUpdate(AGeometryClipMapWorld* Source, int LOD_, FVector NewLocation);
-
-	
-	//////////////////////////////////////////
 	
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ClipMap Settings")
@@ -364,29 +339,29 @@ public:
 	UPROPERTY(Transient, EditAnywhere, BlueprintReadWrite, Category = "Spawnables")
 		bool rebuildVegetationOnly = false;
 
-	UPROPERTY(Transient, EditAnywhere, BlueprintReadWrite, Category = "ClipMap Settings")
+	UPROPERTY(/*Transient, EditAnywhere, BlueprintReadWrite, Category = "ClipMap Settings"*/)
 		bool debug = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ClipMap Settings")
+		int WorldDimensionMeters = 12700;
+	UPROPERTY(/*EditAnywhere, BlueprintReadWrite, Category = "ClipMap Settings"*/)
 		int GridSpacing = 5000;
 
 	/*Valid Value for N: 255/127/63/31/15 */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ClipMap Settings")
+	UPROPERTY(/*VisibleAnywhere, BlueprintReadOnly, Category = "ClipMap Settings"*/)
 		int N = 255;
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ClipMap Settings")
-		ENValue N_Select = ENValue::N255;
+		ENValue VerticePerPatch = ENValue::N255;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ClipMap Settings")
-		int Level = 8;
+		int LOD_Num = 8;
 	/*Hack the culling of the landscape with vertical noise*/
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ClipMap Hack Culling")
 		float VerticalRangeMeters = 0.f;
 
 	UPROPERTY(/*EditAnywhere, BlueprintReadWrite, Category = "ClipMap Settings"*/)
-		EGeoClipWorldType WorldType = EGeoClipWorldType::FlatWorld;
-	UPROPERTY(/*EditAnywhere, BlueprintReadWrite, Category = "ClipMap Settings"*/)
-		EWorldPresentation WorldPresentation = EWorldPresentation::Smooth;
+		EGeoClipWorldType WorldType = EGeoClipWorldType::FlatWorld;	
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ClipMap Settings")
 		UMaterialInterface* Mat;
@@ -424,11 +399,46 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawnables")
 		int DrawCallBudget_Spawnables = 3;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Experimental WorldPresentation")
+		EWorldPresentation WorldPresentation = EWorldPresentation::Smooth;
 	/*Relevant Only if using InstancedMesh representation*/
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ClipMap WorldPresentation")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Experimental WorldPresentation")
 	UStaticMesh* VisualRepresentation;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ClipMap WorldPresentation")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Experimental WorldPresentation")
 		UMaterialInterface* Material_InstancedMeshRepresentation;
+
+	//////////////////////////////////////////
+// Data sharing
+
+/*Allow other actors to access the landscape data, i.e ocean getting landscape heightmap*/
+	UFUNCTION(BlueprintCallable)
+		FVector Get_LOD_RingLocation(int LOD);
+
+	UFUNCTION(BlueprintCallable)
+		UTextureRenderTarget2D* Get_LOD_HeightMap(int LOD);
+	UFUNCTION(BlueprintCallable)
+		UTextureRenderTarget2D* Get_LOD_NormalMap(int LOD);
+
+	/*Send our data updates TO those other world*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dependencies")
+		AGeometryClipMapWorld* DataReceiver;
+
+	/*Receive data updates FROM those other world*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dependencies")
+		AGeometryClipMapWorld* DataSource;
+
+	/*A ring of LOD 5 in receiver will use the LOD 5 + LOD_Offset_FromReceiverToSource of source*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dependencies")
+		int LOD_Offset_FromReceiverToSource = 0;
+
+	/*Update Data that will not change regularly: ring dimensions, vertices number,...*/
+	void UpdateStaticDataFor(AGeometryClipMapWorld* Source_);
+	/*Update Location */
+	void ReceiveExternalDataUpdate(AGeometryClipMapWorld* Source, int LOD_, FVector NewLocation);
+
+
+	//////////////////////////////////////////
 
 	int GetMeshNum(){return Meshes.Num();};
 	FClipMapMeshElement& GetMesh(int i){return Meshes[i];};
