@@ -107,9 +107,11 @@ struct FClipMapMeshElement
 		UTextureRenderTarget2DArray* LandLayers = nullptr;
 	*/
 	UPROPERTY(Transient)
+		TArray<FName> LandLayers_names;
+	UPROPERTY(Transient)
 		TArray<UTextureRenderTarget2D*> LandLayers;
 	UPROPERTY(Transient)
-		UMaterialInstanceDynamic* LayerMatDyn = nullptr;
+		TArray<UMaterialInstanceDynamic*> LayerMatDyn;
 
 
 
@@ -135,8 +137,6 @@ struct FClipMapLayer
 		FString LayerName = "LayerName";
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawnables")
 		UMaterialInterface* MaterialToGenerateLayer = nullptr;
-	UPROPERTY(Transient)
-		int ID=0;
 };
 USTRUCT()
 struct FCollisionMeshElement
@@ -329,7 +329,7 @@ struct FSpawnableMesh
 	~FSpawnableMesh();
 };
 
-UCLASS()
+UCLASS(hideCategories(Collision, Input,Actor, Game, LOD, Replication, Cooking))
 class PROCEDURALLANDSCAPE_API AGeometryClipMapWorld : public AActor
 {
 	GENERATED_UCLASS_BODY()
@@ -359,26 +359,26 @@ public:
 
 	
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ClipMap Settings")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Settings")
 		float UpdateRatePerSecond = 20.0f;
 	/*Number of texel we're storing in between each vertices, with 4 texels, 255 vertices and 12 LODs, it's 50MB of video ram*/
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ClipMap Settings")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Settings")
 		int ClipMapCacheIntraVerticesTexel=4;
 
 	UPROPERTY(Transient)
 		float TimeAcu = 0.0f;	
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ClipMap Settings")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Settings")
 		bool GenerateCollision = false;
 
 	/*If defining a static landscape, cache the landscape computation instead of computing it each frame*/
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ClipMap Settings")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Settings")
 		bool EnableCaching = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ClipMap Settings",meta = (EditCondition = "EnableCaching"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Settings",meta = (EditCondition = "EnableCaching"))
 		int LOD_above_doubleCacheResolution = 2;
 
-	UPROPERTY(Transient,EditAnywhere, BlueprintReadWrite, Category = "ClipMap Settings")
+	UPROPERTY(Transient,EditAnywhere, BlueprintReadWrite, Category = "World Settings")
 		bool rebuild=false;
 	UPROPERTY(Transient, EditAnywhere, BlueprintReadWrite, Category = "Spawnables")
 		bool rebuildVegetationOnly = false;
@@ -386,7 +386,7 @@ public:
 	UPROPERTY(/*Transient, EditAnywhere, BlueprintReadWrite, Category = "ClipMap Settings"*/)
 		bool debug = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ClipMap Settings")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Settings")
 		int WorldDimensionMeters = 12700;
 	UPROPERTY(/*EditAnywhere, BlueprintReadWrite, Category = "ClipMap Settings"*/)
 		int GridSpacing = 5000;
@@ -395,10 +395,10 @@ public:
 	UPROPERTY(/*VisibleAnywhere, BlueprintReadOnly, Category = "ClipMap Settings"*/)
 		int N = 255;
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ClipMap Settings")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Settings")
 		ENValue VerticePerPatch = ENValue::N255;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ClipMap Settings")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Settings")
 		int LOD_Num = 8;
 	/*Hack the culling of the landscape with vertical noise*/
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ClipMap Hack Culling")
@@ -407,34 +407,29 @@ public:
 	UPROPERTY(/*EditAnywhere, BlueprintReadWrite, Category = "ClipMap Settings"*/)
 		EGeoClipWorldType WorldType = EGeoClipWorldType::FlatWorld;	
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ClipMap Settings")
-		UMaterialInterface* Mat;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ClipMap Settings")
-		UMaterialInterface* MatwCaching;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Settings")
+		UMaterialInterface* RuntimeMaterial;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Settings")
+		UMaterialInterface* CachedMaterial;
 	UPROPERTY(Transient)
 		UMaterialInstanceDynamic* MatDyn;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ClipMap Settings")
-		UMaterialInterface* CacheMat;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ClipMap Settings")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Settings")
+		UMaterialInterface* ComputeCacheMat;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Settings")
 		TArray<FClipMapLayer> LandDataLayers;
 	UPROPERTY(Transient)
 		UMaterialInstanceDynamic* CacheMatDyn;
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Collision Settings")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Collision")
 		int CollisionMeshPerQuadrantAroundPlayer = 3;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Collision Settings")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Collision")
 		int CollisionMeshVerticeNumber = 65;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Collision Settings")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Collision")
 		float CollisionMeshWorldDimension = 6400.f;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Collision Settings")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Collision")
 		UMaterialInterface* CollisionMat;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Collision Settings")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World Collision")
 		UMaterialInterface* CollisionMat_HeightRead;
-
-	UPROPERTY(Transient)
-		float TimeAcuSpawnable = 0.0f;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawnables")
-		float UpdateRateSpanablesPerSecond = 10.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawnables")
 		TArray<FSpawnableMesh> Spawnables;
@@ -535,8 +530,6 @@ protected:
 	void UpdateParentInnerMesh(int ChildLevel, EClipMapInteriorConfig NewConfig);
 	FVector CamLocation;
 
-	FVector LastValidL0;
-	bool LastValidSet=false;
 	FRenderCommandFence RTUpdate;
 
 	bool GenerateCollision_last = false;

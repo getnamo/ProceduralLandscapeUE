@@ -69,13 +69,17 @@ void AGeometryClipMapWorld::EndPlay(const EEndPlayReason::Type EndPlayReason)
 			el.MatDyn->RemoveFromRoot();
 		if (el.CacheMatDyn && el.CacheMatDyn->IsRooted())
 			el.CacheMatDyn->RemoveFromRoot();
-		if (el.LayerMatDyn && el.LayerMatDyn->IsRooted())
-			el.LayerMatDyn->RemoveFromRoot();
+		
 
 		for (UTextureRenderTarget2D* el_rt : el.LandLayers)
 		{
-			if (el_rt->IsRooted())
+			if (el_rt && el_rt->IsRooted())
 				el_rt->RemoveFromRoot();
+		}
+		for (UMaterialInstanceDynamic* el_DM : el.LayerMatDyn)
+		{
+			if (el_DM && el_DM->IsRooted())
+				el_DM->RemoveFromRoot();
 		}
 	}
 	for (FSpawnableMesh& el : Spawnables)
@@ -138,9 +142,7 @@ void AGeometryClipMapWorld::Setup()
 			if (Elem.MatDyn && Elem.MatDyn->IsRooted())
 				Elem.MatDyn->RemoveFromRoot();			
 			if (Elem.CacheMatDyn && Elem.CacheMatDyn->IsRooted())
-				Elem.CacheMatDyn->RemoveFromRoot();
-			if (Elem.LayerMatDyn && Elem.LayerMatDyn->IsRooted())
-				Elem.LayerMatDyn->RemoveFromRoot();
+				Elem.CacheMatDyn->RemoveFromRoot();			
 			
 
 			if (Elem.Mesh)
@@ -172,7 +174,14 @@ void AGeometryClipMapWorld::Setup()
 					el->RemoveFromRoot();
 			}
 
+			for (UMaterialInstanceDynamic* el_DM : Elem.LayerMatDyn)
+			{
+				if (el_DM && el_DM->IsRooted())
+					el_DM->RemoveFromRoot();
+			}
+
 			Elem.LandLayers.Empty();
+			Elem.LandLayers_names.Empty();
 		}
 
 		Meshes.Empty();
@@ -912,12 +921,9 @@ void AGeometryClipMapWorld::UpdateClipMap()
 						Elem.I_Mesh->SetWorldLocation(LocRef + ToLoc, false, nullptr, ETeleportType::TeleportPhysics);
 						Elem.I_Mesh->MarkRenderTransformDirty();
 					}
-
-					//if(DataReceiver)
-					//	DataReceiver->ReceiveExternalDataUpdate(this,Level-1-Elem.Level,LocRef + ToLoc);
 					
 
-					if(EnableCaching)
+					if(EnableCaching && ComputeCacheMat)
 					{
 						if (Elem.CacheMatDyn)
 						{
@@ -929,69 +935,27 @@ void AGeometryClipMapWorld::UpdateClipMap()
 							UKismetRenderingLibrary::ClearRenderTarget2D(this, Elem.NormalMap, FLinearColor::Black);
 							UKismetRenderingLibrary::DrawMaterialToRenderTarget(this, Elem.NormalMap, Elem.CacheMatDyn);
 
-							if (Elem.LayerMatDyn && Elem.LandLayers.Num()>0 && Elem.LandLayers[0])
+							
+							for(int k=0; k<Elem.LandLayers.Num();k++)
 							{
-								int CacheRes = Elem.LandLayers[0]->SizeX;
-								// required for Position to UV coord
-								Elem.LayerMatDyn->SetVectorParameterValue("RingLocation", Elem.Location);
-								Elem.LayerMatDyn->SetScalarParameterValue("MeshScale", (N - 1)* Elem.GridSpacing* CacheRes / (CacheRes - 1));
-								Elem.LayerMatDyn->SetScalarParameterValue("N", N);
-								Elem.LayerMatDyn->SetScalarParameterValue("CacheRes", CacheRes);
-								Elem.LayerMatDyn->SetScalarParameterValue("LocalGridScaling", Elem.GridSpacing);
+								if(!Elem.LayerMatDyn[k] || !Elem.LandLayers[k])
+								{
+									UE_LOG(LogTemp,Warning,TEXT("ERROR drawing layers: !Elem.LayerMatDyn[%d] || !Elem.LandLayers[%d]"),k,k);
+									continue;
+								}
 
-								Elem.LayerMatDyn->SetTextureParameterValue("HeightMap", Elem.HeightMap);
-								Elem.LayerMatDyn->SetTextureParameterValue("NormalMap", Elem.NormalMap);
-								UKismetRenderingLibrary::ClearRenderTarget2D(this, Elem.LandLayers[0], FLinearColor::Black);
-								UKismetRenderingLibrary::DrawMaterialToRenderTarget(this, Elem.LandLayers[0], Elem.LayerMatDyn);								
+								
+								Elem.LayerMatDyn[k]->SetVectorParameterValue("RingLocation", Elem.Location);
+								
+
+								UKismetRenderingLibrary::ClearRenderTarget2D(this, Elem.LandLayers[k], FLinearColor::Black);
+								UKismetRenderingLibrary::DrawMaterialToRenderTarget(this, Elem.LandLayers[k], Elem.LayerMatDyn[k]);
 							}
+							
 						}
 						else
 						{
-							if (CacheMat)
-							{
-								Elem.CacheMatDyn = UMaterialInstanceDynamic::Create(CacheMat, this);
-
-								// required for Position to UV coord
-								Elem.CacheMatDyn->SetVectorParameterValue("RingLocation", Elem.Location);
-								Elem.CacheMatDyn->SetScalarParameterValue("N", N);
-								Elem.CacheMatDyn->SetScalarParameterValue("LocalGridScaling", Elem.GridSpacing);
-								//
-
-								Elem.CacheMatDyn->SetScalarParameterValue("NormalMapSelect", 0.f);
-								UKismetRenderingLibrary::ClearRenderTarget2D(this, Elem.HeightMap, FLinearColor::Black);
-								UKismetRenderingLibrary::DrawMaterialToRenderTarget(this, Elem.HeightMap, Elem.CacheMatDyn);
-								Elem.CacheMatDyn->SetScalarParameterValue("NormalMapSelect", 1.f);
-								UKismetRenderingLibrary::ClearRenderTarget2D(this, Elem.NormalMap, FLinearColor::Black);
-								UKismetRenderingLibrary::DrawMaterialToRenderTarget(this, Elem.NormalMap, Elem.CacheMatDyn);
-
-								if (Elem.LandLayers.Num()>0)
-								{
-									//TODO add an easy way to draw materials into a 2D_RT_Array
-									for (FClipMapLayer& layer : LandDataLayers)
-									{
-										if (layer.MaterialToGenerateLayer)
-										{
-											//draw landscape layer
-
-											Elem.LayerMatDyn = UMaterialInstanceDynamic::Create(layer.MaterialToGenerateLayer, this);
-											// required for Position to UV coord
-											Elem.LayerMatDyn->SetVectorParameterValue("RingLocation", Elem.Location);
-											Elem.LayerMatDyn->SetScalarParameterValue("N", N);
-											Elem.LayerMatDyn->SetScalarParameterValue("LocalGridScaling", Elem.GridSpacing);
-											
-											Elem.LayerMatDyn->SetTextureParameterValue("HeightMap", Elem.HeightMap);
-											Elem.LayerMatDyn->SetTextureParameterValue("NormalMap", Elem.NormalMap);
-											UKismetRenderingLibrary::ClearRenderTarget2D(this, Elem.LandLayers[0], FLinearColor::Black);
-											UKismetRenderingLibrary::DrawMaterialToRenderTarget(this, Elem.LandLayers[0], Elem.LayerMatDyn);
-											//
-										}
-
-										//Support only a single layer texture for now, so 4 channels
-										break;
-									}
-								}
-							}
-
+							UE_LOG(LogTemp,Warning,TEXT("ERROR Recreating the clipmap cache computation materials - should not be happening"));
 						}
 					}
 					
@@ -1628,17 +1592,22 @@ void AGeometryClipMapWorld::InitiateWorld()
 			NewElem.NormalMap->AddressY = TA_Clamp;
 			NewElem.NormalMap->UpdateResourceImmediate();
 
-			if(LandDataLayers.Num()>0 && LandDataLayers[0].MaterialToGenerateLayer)
+			for(FClipMapLayer& layer : LandDataLayers)
 			{
-				NewElem.LandLayers.Empty();
-				UTextureRenderTarget2D* Layer = UKismetRenderingLibrary::CreateRenderTarget2D(GetWorld(), CacheRes, CacheRes, RTF_RGBA8, FLinearColor(0, 0, 0, 1), false);				
+				if(layer.LayerName!="" && layer.MaterialToGenerateLayer)
+				{
+				
+					UTextureRenderTarget2D* Layer = UKismetRenderingLibrary::CreateRenderTarget2D(GetWorld(), CacheRes, CacheRes, RTF_RGBA8, FLinearColor(0, 0, 0, 1), false);
 #if !WITH_EDITOR
-			Layer->AddToRoot();
+					Layer->AddToRoot();
 #endif
-				Layer->AddressX = TA_Clamp;
-				Layer->AddressY = TA_Clamp;
-				Layer->UpdateResourceImmediate();
-				NewElem.LandLayers.Add(Layer);
+					Layer->AddressX = TA_Clamp;
+					Layer->AddressY = TA_Clamp;
+					Layer->UpdateResourceImmediate();
+					NewElem.LandLayers.Add(Layer);
+					NewElem.LandLayers_names.Add(FName(*layer.LayerName));
+
+				}
 			}
 			
 		}
@@ -2149,9 +2118,9 @@ void AGeometryClipMapWorld::InitiateWorld()
 
 		NewElem.Config= EClipMapInteriorConfig::BotLeft;
 
-		if (EnableCaching && CacheMat)
+		if (EnableCaching && ComputeCacheMat)
 		{
-			NewElem.CacheMatDyn = UMaterialInstanceDynamic::Create(CacheMat, this);
+			NewElem.CacheMatDyn = UMaterialInstanceDynamic::Create(ComputeCacheMat, this);
 #if !WITH_EDITOR
 			NewElem.CacheMatDyn->AddToRoot();
 #endif
@@ -2167,39 +2136,52 @@ void AGeometryClipMapWorld::InitiateWorld()
 			UKismetRenderingLibrary::ClearRenderTarget2D(this, NewElem.NormalMap, FLinearColor::Black);
 			UKismetRenderingLibrary::DrawMaterialToRenderTarget(this, NewElem.NormalMap, NewElem.CacheMatDyn);
 
-			if(LandDataLayers.Num()>0 && LandDataLayers[0].MaterialToGenerateLayer)
+			int layerIndice = 0;
+			for(FClipMapLayer& Layer : LandDataLayers)
 			{
-				//draw landscape layer
-
-				NewElem.LayerMatDyn = UMaterialInstanceDynamic::Create(LandDataLayers[0].MaterialToGenerateLayer, this);
+				if(Layer.LayerName!="" && Layer.MaterialToGenerateLayer)
+				{
+					UMaterialInstanceDynamic* LayerDynMat = UMaterialInstanceDynamic::Create(Layer.MaterialToGenerateLayer, this);
 #if !WITH_EDITOR
-				NewElem.LayerMatDyn->AddToRoot();
-#endif
-				// required for Position to UV coord
-				NewElem.LayerMatDyn->SetVectorParameterValue("RingLocation", NewElem.Location);
-				NewElem.LayerMatDyn->SetScalarParameterValue("MeshScale", (N - 1) * NewElem.GridSpacing * CacheRes / (CacheRes - 1));
-				NewElem.LayerMatDyn->SetScalarParameterValue("N", N);
-				NewElem.LayerMatDyn->SetScalarParameterValue("CacheRes", CacheRes);
-				NewElem.LayerMatDyn->SetScalarParameterValue("LocalGridScaling", NewElem.GridSpacing);
+					LayerDynMat->AddToRoot();
+#endif					
 
-				NewElem.LayerMatDyn->SetTextureParameterValue("HeightMap", NewElem.HeightMap);
-				NewElem.LayerMatDyn->SetTextureParameterValue("NormalMap", NewElem.NormalMap);
-				UKismetRenderingLibrary::ClearRenderTarget2D(this, NewElem.LandLayers[0], FLinearColor::Black);
-				UKismetRenderingLibrary::DrawMaterialToRenderTarget(this, NewElem.LandLayers[0], NewElem.LayerMatDyn);
-				//				
+					// required for Position to UV coord
+					LayerDynMat->SetVectorParameterValue("RingLocation", NewElem.Location);
+					LayerDynMat->SetScalarParameterValue("MeshScale", (N - 1) * NewElem.GridSpacing * CacheRes / (CacheRes - 1));
+					LayerDynMat->SetScalarParameterValue("N", N);
+					LayerDynMat->SetScalarParameterValue("CacheRes", CacheRes);
+					LayerDynMat->SetScalarParameterValue("LocalGridScaling", NewElem.GridSpacing);
 
+					LayerDynMat->SetTextureParameterValue("HeightMap", NewElem.HeightMap);
+					LayerDynMat->SetTextureParameterValue("NormalMap", NewElem.NormalMap);
+
+					for (int u = 0; u < layerIndice; u++)
+					{
+						LayerDynMat->SetTextureParameterValue(NewElem.LandLayers_names[u], NewElem.LandLayers[u]);
+					}
+
+					UKismetRenderingLibrary::ClearRenderTarget2D(this, NewElem.LandLayers[layerIndice], FLinearColor::Black);
+					UKismetRenderingLibrary::DrawMaterialToRenderTarget(this, NewElem.LandLayers[layerIndice], LayerDynMat);
+
+					NewElem.LayerMatDyn.Add(LayerDynMat);
+
+					
+
+					layerIndice++;
+				}
 			}
 			
 		}
 
-		if( Mat)
+		if( RuntimeMaterial)
 		{
 			if(NewElem.Mesh)
 			{
-				if (EnableCaching && MatwCaching)
-					NewElem.MatDyn = UMaterialInstanceDynamic::Create(MatwCaching, this);
+				if (EnableCaching && CachedMaterial)
+					NewElem.MatDyn = UMaterialInstanceDynamic::Create(CachedMaterial, this);
 				else
-					NewElem.MatDyn = UMaterialInstanceDynamic::Create(Mat, this);
+					NewElem.MatDyn = UMaterialInstanceDynamic::Create(RuntimeMaterial, this);
 			}
 			else
 			{
@@ -2241,8 +2223,10 @@ void AGeometryClipMapWorld::InitiateWorld()
 			NewElem.MatDyn->SetTextureParameterValue("HeightMap", NewElem.HeightMap);
 			NewElem.MatDyn->SetTextureParameterValue("NormalMap", NewElem.NormalMap);
 
-			if(NewElem.LandLayers.Num()>0)
-				NewElem.MatDyn->SetTextureParameterValue("LayerDataMap", NewElem.LandLayers[0]);
+			for (int u = 0; u < NewElem.LandLayers.Num(); u++)
+			{
+				NewElem.MatDyn->SetTextureParameterValue(NewElem.LandLayers_names[u], NewElem.LandLayers[u]);
+			}
 		}
 
 
@@ -2546,23 +2530,26 @@ void FSpawnableMesh::UpdateSpawnableData(FSpawnableMeshElement& MeshElem)
 
 			if (!MeshElem.ComputeSpawnTransformDyn)
 			{
+#if !WITH_EDITOR
+				DynSpawnMat->AddToRoot();
+#endif
+
 				MeshElem.ComputeSpawnTransformDyn = DynSpawnMat;
 				DynSpawnMat->SetScalarParameterValue("N", Owner->N);
 				DynSpawnMat->SetScalarParameterValue("LocalGridScaling", Elem.GridSpacing);
 				DynSpawnMat->SetTextureParameterValue("HeightMap", Elem.HeightMap);
 				DynSpawnMat->SetTextureParameterValue("NormalMap", Elem.NormalMap);
-				if (Elem.LandLayers.Num() > 0)
-					DynSpawnMat->SetTextureParameterValue("LayerDataMap", Elem.LandLayers[0]);
+				for(int i=0; i<Elem.LandLayers.Num();i++)
+				{
+					DynSpawnMat->SetTextureParameterValue(Elem.LandLayers_names[i], Elem.LandLayers[i]);
+				}
 			}
 
 			if(Elem.IsSectionVisible(0)||Elem.IsSectionVisible(1))
 			{
 				DynSpawnMat->SetScalarParameterValue("ComputeToggle", 0.f);
 				DynSpawnMat->SetVectorParameterValue("RingLocation", Elem.Location);
-				
-
-				
-				
+	
 			}
 			else
 				return;
@@ -2746,10 +2733,15 @@ void FSpawnableMesh::CleanUp()
 			El.LocationZ->RemoveFromRoot();
 		if (El.Rotation->IsRooted())
 			El.Rotation->RemoveFromRoot();
+		if (El.ComputeSpawnTransformDyn && El.ComputeSpawnTransformDyn->IsRooted())
+			El.ComputeSpawnTransformDyn->RemoveFromRoot();
+
+		
 		El.LocationX=nullptr;
 		El.LocationY=nullptr;
 		El.LocationZ=nullptr;
 		El.Rotation=nullptr;
+		El.ComputeSpawnTransformDyn=nullptr;
 	}
 
 	SpawnablesElem.Empty();
