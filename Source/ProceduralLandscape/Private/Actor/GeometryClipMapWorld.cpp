@@ -374,13 +374,25 @@ void AGeometryClipMapWorld::PostEditChangeProperty(FPropertyChangedEvent& Proper
 	{
 		FString PropName = PropertyChangedEvent.Property->GetName();
 
-		if(PropName == TEXT("Spawnables") || PropName == TEXT("RegionWorldDimension")|| PropName == TEXT("NumberOfInstanceToComputePerRegion")|| PropName == TEXT("AlignMaxAngle")|| PropName == TEXT("Mesh")|| PropName == TEXT("AltitudeRange")|| PropName == TEXT("ScaleRange")|| PropName == TEXT("GroundSlopeAngle"))
-		{
-			//UE_LOG(LogTemp,Warning,TEXT("PostEditChangeProperty rebuildVegetationOnly"));
-			rebuildVegetationOnly=true;
-			
+		if(PropName == TEXT("Spawnables") || 
+			PropName == TEXT("RegionWorldDimension")|| 
+			PropName == TEXT("NumberOfInstanceToComputePerRegion")|| 
+			PropName == TEXT("AlignMaxAngle")|| 
+			PropName == TEXT("SpawnType")||
+			PropName == TEXT("Mesh")||
+			PropName == TEXT("Actors")|| 
+			PropName == TEXT("AltitudeRange")|| 
+			PropName == TEXT("ScaleRange")|| 
+			PropName == TEXT("GroundSlopeAngle"))
+		{			
+			rebuildVegetationOnly=true;			
 		}
-		else if(PropName == TEXT("VerticePerPatch") || PropName == TEXT("LOD_Num")|| PropName == TEXT("ClipMapCacheIntraVerticesTexel")|| PropName == TEXT("WorldDimensionMeters")|| PropName == TEXT("WorldPresentation")|| PropName == TEXT("LandDataLayers"))
+		else if(PropName == TEXT("VerticePerPatch") || 
+			PropName == TEXT("LOD_Num")|| 
+			PropName == TEXT("ClipMapCacheIntraVerticesTexel")|| 
+			PropName == TEXT("WorldDimensionMeters")|| 
+			PropName == TEXT("WorldPresentation")|| 
+			PropName == TEXT("LandDataLayers"))
 		{
 			rebuild=true;
 		}

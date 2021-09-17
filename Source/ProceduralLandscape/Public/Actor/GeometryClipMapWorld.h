@@ -243,10 +243,10 @@ struct FSpawnableMesh
 		UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MeshToSpawn")
 		ESpawnableType SpawnType = ESpawnableType::Mesh;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MeshToSpawn")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MeshToSpawn",meta = (EditCondition = "SpawnType==ESpawnableType::Mesh"))
 		bool CollisionEnabled = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MeshToSpawn")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MeshToSpawn",meta = (EditCondition = "SpawnType==ESpawnableType::Mesh"))
 		bool CastShadows = true;
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MeshToSpawn",meta = (EditCondition = "SpawnType==ESpawnableType::Mesh"))
