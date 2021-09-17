@@ -42,6 +42,50 @@ void AGeometryClipMapWorld::BeginPlay()
 	Super::BeginPlay();
 }
 
+void AGeometryClipMapWorld::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	for(FCollisionMeshElement& el : CollisionMesh)
+	{
+		if(el.CollisionRT->IsRooted())
+			el.CollisionRT->RemoveFromRoot();
+		if (el.Mesh && el.Mesh->IsRooted())
+			el.Mesh->RemoveFromRoot();
+	}
+	for (FClipMapMeshElement& el : Meshes)
+	{
+		if (el.HeightMap->IsRooted())
+			el.HeightMap->RemoveFromRoot();
+
+		if (el.NormalMap->IsRooted())
+			el.NormalMap->RemoveFromRoot();
+
+		if (el.Mesh && el.Mesh->IsRooted())
+			el.Mesh->RemoveFromRoot();
+
+		if (el.I_Mesh && el.I_Mesh->IsRooted())
+			el.I_Mesh->RemoveFromRoot();
+
+		if (el.MatDyn && el.MatDyn->IsRooted())
+			el.MatDyn->RemoveFromRoot();
+		if (el.CacheMatDyn && el.CacheMatDyn->IsRooted())
+			el.CacheMatDyn->RemoveFromRoot();
+		if (el.LayerMatDyn && el.LayerMatDyn->IsRooted())
+			el.LayerMatDyn->RemoveFromRoot();
+
+		for (UTextureRenderTarget2D* el_rt : el.LandLayers)
+		{
+			if (el_rt->IsRooted())
+				el_rt->RemoveFromRoot();
+		}
+	}
+	for (FSpawnableMesh& el : Spawnables)
+	{
+		el.CleanUp();
+	}
+	
+
+	Super::EndPlay(EndPlayReason);
+}
 #if WITH_EDITOR
 bool AGeometryClipMapWorld::ShouldTickIfViewportsOnly() const
 {
@@ -85,8 +129,25 @@ void AGeometryClipMapWorld::Setup()
 		for (int i = Meshes.Num() - 1; i >= 0; i--)
 		{
 			FClipMapMeshElement& Elem = Meshes[i];
+
+			if (Elem.HeightMap && Elem.HeightMap->IsRooted())
+					Elem.HeightMap->RemoveFromRoot();
+			if (Elem.NormalMap && Elem.NormalMap->IsRooted())
+					Elem.NormalMap->RemoveFromRoot();
+
+			if (Elem.MatDyn && Elem.MatDyn->IsRooted())
+				Elem.MatDyn->RemoveFromRoot();			
+			if (Elem.CacheMatDyn && Elem.CacheMatDyn->IsRooted())
+				Elem.CacheMatDyn->RemoveFromRoot();
+			if (Elem.LayerMatDyn && Elem.LayerMatDyn->IsRooted())
+				Elem.LayerMatDyn->RemoveFromRoot();
+			
+
 			if (Elem.Mesh)
 			{
+				if (Elem.Mesh->IsRooted())
+					Elem.Mesh->RemoveFromRoot();
+				
 				Elem.Mesh->ClearAllMeshSections();
 				Elem.Mesh->UnregisterComponent();
 				Elem.Mesh->DestroyComponent();
@@ -94,6 +155,9 @@ void AGeometryClipMapWorld::Setup()
 			}
 			if (Elem.I_Mesh)
 			{
+				if (Elem.I_Mesh->IsRooted())
+					Elem.I_Mesh->RemoveFromRoot();
+
 				Elem.I_Mesh->ClearInstances();
 				Elem.I_Mesh->UnregisterComponent();
 				Elem.I_Mesh->DestroyComponent();
@@ -101,6 +165,13 @@ void AGeometryClipMapWorld::Setup()
 			}
 			Elem.HeightMap = nullptr;
 			Elem.NormalMap = nullptr;
+
+			for (UTextureRenderTarget2D* el : Elem.LandLayers)
+			{
+				if (el && el->IsRooted())
+					el->RemoveFromRoot();
+			}
+
 			Elem.LandLayers.Empty();
 		}
 
@@ -111,6 +182,12 @@ void AGeometryClipMapWorld::Setup()
 			FCollisionMeshElement& Elem = CollisionMesh[i];
 			if (Elem.Mesh)
 			{
+				if (Elem.Mesh->IsRooted())
+					Elem.Mesh->RemoveFromRoot();
+
+				if (Elem.CollisionRT->IsRooted())
+					Elem.CollisionRT->RemoveFromRoot();
+
 				Elem.Mesh->ClearAllMeshSections();
 				Elem.Mesh->UnregisterComponent();
 				Elem.Mesh->DestroyComponent();
@@ -1375,6 +1452,9 @@ FCollisionMeshElement& AGeometryClipMapWorld::GetACollisionMesh()
 
 	NewElem.CollisionRT = UKismetRenderingLibrary::CreateRenderTarget2D(World, SizeT, SizeT, RTF_RGBA8,
 		FLinearColor(0, 0, 0, 1), false);
+#if !WITH_EDITOR
+	NewElem.CollisionRT->AddToRoot();
+#endif
 
 	NewElem.CollisionRT->ClearColor = FLinearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	
@@ -1384,6 +1464,9 @@ FCollisionMeshElement& AGeometryClipMapWorld::GetACollisionMesh()
 
 	NewElem.Mesh = NewObject<UProceduralMeshComponent>(this, NAME_None, RF_Transient);
 
+#if !WITH_EDITOR
+	NewElem.Mesh->AddToRoot();
+#endif
 	NewElem.Mesh->bUseAsyncCooking=true;
 
 	NewElem.Mesh->SetupAttachment(RootComponent);
@@ -1457,11 +1540,18 @@ void AGeometryClipMapWorld::InitiateWorld()
 		if(EnableCaching)
 		{
 			NewElem.HeightMap = UKismetRenderingLibrary::CreateRenderTarget2D(GetWorld(), CacheRes, CacheRes, RTF_RGBA8, FLinearColor(0, 0, 0, 1), false);
+#if !WITH_EDITOR
+			NewElem.HeightMap->AddToRoot();
+#endif
 			NewElem.HeightMap->Filter = TF_Nearest;
 			NewElem.HeightMap->AddressX = TA_Clamp;
 			NewElem.HeightMap->AddressY = TA_Clamp;
 			NewElem.HeightMap->UpdateResourceImmediate();
+
 			NewElem.NormalMap = UKismetRenderingLibrary::CreateRenderTarget2D(GetWorld(), CacheRes, CacheRes, RTF_RGBA8, FLinearColor(0, 0, 0, 1), false);
+#if !WITH_EDITOR
+			NewElem.NormalMap->AddToRoot();
+#endif
 			NewElem.NormalMap->AddressX = TA_Clamp;
 			NewElem.NormalMap->AddressY = TA_Clamp;
 			NewElem.NormalMap->UpdateResourceImmediate();
@@ -1470,6 +1560,9 @@ void AGeometryClipMapWorld::InitiateWorld()
 			{
 				NewElem.LandLayers.Empty();
 				UTextureRenderTarget2D* Layer = UKismetRenderingLibrary::CreateRenderTarget2D(GetWorld(), CacheRes, CacheRes, RTF_RGBA8, FLinearColor(0, 0, 0, 1), false);				
+#if !WITH_EDITOR
+			Layer->AddToRoot();
+#endif
 				Layer->AddressX = TA_Clamp;
 				Layer->AddressY = TA_Clamp;
 				Layer->UpdateResourceImmediate();
@@ -1483,6 +1576,9 @@ void AGeometryClipMapWorld::InitiateWorld()
 		if(WorldPresentation==EWorldPresentation::InstancedMesh)
 		{
 			NewElem.I_Mesh = NewObject<UInstancedStaticMeshComponent>(this, NAME_None, RF_Transient);
+#if !WITH_EDITOR
+			NewElem.I_Mesh->AddToRoot();
+#endif
 			NewElem.I_Mesh->SetupAttachment(RootComponent);
 			NewElem.I_Mesh->RegisterComponent();
 
@@ -1502,6 +1598,9 @@ void AGeometryClipMapWorld::InitiateWorld()
 		else
 		{
 			NewElem.Mesh = NewObject<UGeoClipmapMeshComponent>(this, NAME_None, RF_Transient);
+#if !WITH_EDITOR
+			NewElem.Mesh->AddToRoot();
+#endif
 			NewElem.Mesh->SetupAttachment(RootComponent);
 			NewElem.Mesh->RegisterComponent();
 
@@ -1981,6 +2080,9 @@ void AGeometryClipMapWorld::InitiateWorld()
 		if (EnableCaching && CacheMat)
 		{
 			NewElem.CacheMatDyn = UMaterialInstanceDynamic::Create(CacheMat, this);
+#if !WITH_EDITOR
+			NewElem.CacheMatDyn->AddToRoot();
+#endif
 			NewElem.CacheMatDyn->SetVectorParameterValue("RingLocation", NewElem.Location);
 			NewElem.CacheMatDyn->SetScalarParameterValue("MeshScale", (N - 1) * NewElem.GridSpacing * CacheRes / (CacheRes - 1));
 			NewElem.CacheMatDyn->SetScalarParameterValue("N", N);
@@ -1998,6 +2100,9 @@ void AGeometryClipMapWorld::InitiateWorld()
 				//draw landscape layer
 
 				NewElem.LayerMatDyn = UMaterialInstanceDynamic::Create(LandDataLayers[0].MaterialToGenerateLayer, this);
+#if !WITH_EDITOR
+				NewElem.LayerMatDyn->AddToRoot();
+#endif
 				// required for Position to UV coord
 				NewElem.LayerMatDyn->SetVectorParameterValue("RingLocation", NewElem.Location);
 				NewElem.LayerMatDyn->SetScalarParameterValue("MeshScale", (N - 1) * NewElem.GridSpacing * CacheRes / (CacheRes - 1));
@@ -2030,6 +2135,11 @@ void AGeometryClipMapWorld::InitiateWorld()
 					NewElem.MatDyn = UMaterialInstanceDynamic::Create(Material_InstancedMeshRepresentation, this);
 					
 			}
+
+#if !WITH_EDITOR
+			if(NewElem.MatDyn)
+				NewElem.MatDyn->AddToRoot();
+#endif
 			
 
 			
@@ -2175,8 +2285,6 @@ void AGeometryClipMapWorld::UpdateSpawnables()
 			for (int j = -3; j <= 3; j++)
 			{
 
-				
-
 				FIntVector LocMeshInt = FIntVector(CamX + i, CamY + j, 0);
 
 				FVector MeshLoc = Spawn.RegionWorldDimension * FVector(LocMeshInt) + GetActorLocation().Z * FVector(0.f, 0.f, 1);
@@ -2262,13 +2370,25 @@ FSpawnableMeshElement& FSpawnableMesh::GetASpawnableElem()
 	uint32 SizeT = (uint32)RT_Dim;
 
 	NewElem.LocationX = UKismetRenderingLibrary::CreateRenderTarget2D(World, SizeT, SizeT, RTF_RGBA8, FLinearColor(0, 0, 0, 1), false);
+#if !WITH_EDITOR
+	NewElem.LocationX->AddToRoot();
+#endif
 	NewElem.LocationX->UpdateResourceImmediate();
 	NewElem.LocationY = UKismetRenderingLibrary::CreateRenderTarget2D(World, SizeT, SizeT, RTF_RGBA8, FLinearColor(0, 0, 0, 1), false);
+#if !WITH_EDITOR
+	NewElem.LocationY->AddToRoot();
+#endif
 	NewElem.LocationY->UpdateResourceImmediate();
 	NewElem.LocationZ = UKismetRenderingLibrary::CreateRenderTarget2D(World, SizeT, SizeT, RTF_RGBA8, FLinearColor(0, 0, 0, 1), false);
+#if !WITH_EDITOR
+	NewElem.LocationZ->AddToRoot();
+#endif
 	NewElem.LocationZ->UpdateResourceImmediate();
 
 	NewElem.Rotation = UKismetRenderingLibrary::CreateRenderTarget2D(World, SizeT, SizeT, RTF_RGBA8, FLinearColor(0, 0, 0, 1), false);
+#if !WITH_EDITOR
+	NewElem.Rotation->AddToRoot();
+#endif
 	NewElem.Rotation->UpdateResourceImmediate();
 
 
@@ -2497,6 +2617,9 @@ void FSpawnableMesh::Initiate(AGeometryClipMapWorld* Owner_)
 			if(Sm)
 			{
 				UHierarchicalInstancedStaticMeshComponent* NHISM = NewObject<UHierarchicalInstancedStaticMeshComponent>(Owner, NAME_None, RF_Transient);
+#if !WITH_EDITOR
+				NHISM->AddToRoot();
+#endif
 				NHISM->SetupAttachment(Owner->GetRootComponent());
 				NHISM->RegisterComponent();
 				NHISM->SetStaticMesh(Sm);
@@ -2515,6 +2638,14 @@ void FSpawnableMesh::CleanUp()
 	
 	for(FSpawnableMeshElement& El:SpawnablesElem)
 	{
+		if (El.LocationX->IsRooted())
+			El.LocationX->RemoveFromRoot();
+		if (El.LocationY->IsRooted())
+			El.LocationY->RemoveFromRoot();
+		if (El.LocationZ->IsRooted())
+			El.LocationZ->RemoveFromRoot();
+		if (El.Rotation->IsRooted())
+			El.Rotation->RemoveFromRoot();
 		El.LocationX=nullptr;
 		El.LocationY=nullptr;
 		El.LocationZ=nullptr;
@@ -2532,6 +2663,8 @@ void FSpawnableMesh::CleanUp()
 	{
 		if(HISM && Owner && Owner->GetWorld())
 		{
+			if (HISM->IsRooted())
+				HISM->RemoveFromRoot();
 			HISM->ClearInstances();
 			HISM->UnregisterComponent();
 			HISM->DestroyComponent();
