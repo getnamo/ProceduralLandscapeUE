@@ -52,6 +52,21 @@ enum class ENValue : uint8
 	N15 UMETA(DisplayName = "15"),
 };
 
+UENUM(BlueprintType)
+enum class ESpawnableType : uint8
+{
+	Mesh UMETA(DisplayName = "Spawn instanced Meshes"),
+	Actor UMETA(DisplayName = "Spawn Actors"),
+};
+
+
+UENUM(BlueprintType)
+enum class EActorSpawningMethod : uint8
+{
+	Deferred UMETA(DisplayName = "Deferred Actor Spawning"),
+	Direct UMETA(DisplayName = "Direct Spawn"),
+};
+
 USTRUCT()
 struct FClipMapMeshElement
 {
@@ -211,10 +226,22 @@ struct FSpawnableMeshElement
 
 class AGeometryClipMapWorld;
 
+USTRUCT()
+struct FSpawnedActorList
+{
+	GENERATED_BODY()
+
+		UPROPERTY(Transient)
+		TArray<AActor*> SpawnedActors;
+};
+
 USTRUCT(BlueprintType)
 struct FSpawnableMesh
 {
 	GENERATED_BODY()
+
+		UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MeshToSpawn")
+		ESpawnableType SpawnType = ESpawnableType::Mesh;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MeshToSpawn")
 		bool CollisionEnabled = false;
@@ -222,8 +249,15 @@ struct FSpawnableMesh
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MeshToSpawn")
 		bool CastShadows = true;
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MeshToSpawn")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MeshToSpawn",meta = (EditCondition = "SpawnType==ESpawnableType::Mesh"))
 		TArray<UStaticMesh*> Mesh;	
+
+	/*USE WITH CARE, there's no pool system for now. Spawning and destroying at runtime*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MeshToSpawn",meta = (EditCondition = "SpawnType==ESpawnableType::Actor"))
+		TArray<TSubclassOf<AActor>> Actors;
+
+	UPROPERTY(/*EditAnywhere, BlueprintReadWrite, Category = "MeshToSpawn",meta = (EditCondition = "SpawnType==ESpawnableType::Actor")*/)
+		EActorSpawningMethod ActorSpawningMethod = EActorSpawningMethod::Direct;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MeshToSpawn")
 		float AlignMaxAngle = 90.f;
@@ -239,6 +273,13 @@ struct FSpawnableMesh
 
 	UPROPERTY(Transient)
 		TArray<UHierarchicalInstancedStaticMeshComponent*> HIM_Mesh;
+
+	UPROPERTY(Transient)
+		TArray<FSpawnedActorList> Spawned_Actors;
+
+	UPROPERTY(Transient)
+		TArray<TSubclassOf<AActor>> Actors_Validated;
+
 	UPROPERTY(Transient)
 		TArray<int> InstanceIndexToHIMIndex;
 	UPROPERTY(Transient)
@@ -274,7 +315,9 @@ struct FSpawnableMesh
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawnables")
 		UMaterialInterface* CustomSpawnablesMat=nullptr;
+
 	FSpawnableMeshElement& GetASpawnableElem();
+
 	void ReleaseSpawnableElem(int ID);
 
 	void UpdateSpawnableData(FSpawnableMeshElement& MeshElem );
@@ -484,7 +527,7 @@ protected:
 	double ComputeWorldHeightAt(FVector WorldLocation);
 	void UpdateCollisionMeshData(FCollisionMeshElement& Mesh );
 
-	FTransform GetWorldTransformOfSpawnable(const FVector& CompLoc, FColor& LocX, FColor& LocY, FColor& LocZ, FColor& Rot);
+	FTransform GetLocalTransformOfSpawnable(const FVector& CompLoc, FColor& LocX, FColor& LocY, FColor& LocZ, FColor& Rot);
 	void ProcessSpawnablePending();
 
 	EClipMapInteriorConfig RelativeLocationToParentInnerMeshConfig(FVector RelativeLocation);
@@ -501,7 +544,7 @@ protected:
 	bool Caching_last=false;
 
 	int DrawCall_Spawnables_count = 0;
-	UStaticMesh* Spawnable_Stopped = nullptr; 
+	int Spawnable_Stopped_indice=-1;
 	
 
 };
