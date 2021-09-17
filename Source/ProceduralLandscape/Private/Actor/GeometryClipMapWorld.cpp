@@ -53,10 +53,10 @@ void AGeometryClipMapWorld::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	}
 	for (FClipMapMeshElement& el : Meshes)
 	{
-		if (el.HeightMap->IsRooted())
+		if (el.HeightMap && el.HeightMap->IsRooted())
 			el.HeightMap->RemoveFromRoot();
 
-		if (el.NormalMap->IsRooted())
+		if (el.NormalMap && el.NormalMap->IsRooted())
 			el.NormalMap->RemoveFromRoot();
 
 		if (el.Mesh && el.Mesh->IsRooted())
