@@ -181,6 +181,7 @@ void AGeometryClipMapWorld::Setup()
 			}
 
 			Elem.LandLayers.Empty();
+			Elem.LayerMatDyn.Empty();
 			Elem.LandLayers_names.Empty();
 		}
 
