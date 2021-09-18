@@ -37,69 +37,6 @@ static TAutoConsoleVariable<int32> CVarRayTracingGeoClipProceduralMesh(
 	TEXT("Include GeoClip procedural meshes in ray tracing effects (default = 1 (procedural meshes enabled in ray tracing))"));
 
 
-#if 0
-void UGeoClipmapMeshComponent::SetLocalBound(FBoxSphereBounds NewBound)
-{
-	UseCustomBounds=true;
-
-	LocalBoundsGeoC = NewBound;
-	UpdateCustomBound();
-}
-
-void UGeoClipmapMeshComponent::UpdateCustomBound()
-{
-	FBox LocalBox(ForceInit);
-
-	if (!UseCustomBounds)
-	{		
-
-		int NumSection = GetNumSections();// section 0 is the full square mesh, all we need
-		for (int i = 0; i < NumSection; i++)
-		{		
-			if (FGeoCProcMeshSection* Section = GetProcMeshSection(i))
-				LocalBox += Section->SectionLocalBox;
-		}
-
-		LocalBoundsStandard = LocalBox.IsValid ? FBoxSphereBounds(LocalBox) : FBoxSphereBounds(FVector(0, 0, 0), FVector(0, 0, 0), 0); // fallback to reset box sphere bounds
-	}
-	else
-	{
-		/*
-		for (UGeoClipmapMeshComponent* Mesh : BoundsSource)
-		{
-			int NumSection = Mesh->GetNumSections();
-			for (int i = 0; i < NumSection; i++)
-			{
-				if (FGeoCProcMeshSection* Section = Mesh->GetProcMeshSection(i))
-					LocalBox += Section->SectionLocalBox;
-			}
-		}
-		*/
-
-		LocalBoundsGeoC = LocalBox.IsValid ? FBoxSphereBounds(LocalBox) : FBoxSphereBounds(FVector(0, 0, 0), FVector(0, 0, 0), 0); // fallback to reset box sphere bounds;
-	}
-
-
-	// Update global bounds
-	UpdateBounds();
-	// Need to send to render thread
-	MarkRenderStateDirty();
-
-}
-
-FBoxSphereBounds UGeoClipmapMeshComponent::CalcBounds(const FTransform& LocalToWorld) const
-{
-	FBoxSphereBounds Ret((UseCustomBounds?LocalBoundsGeoC:LocalBoundsStandard).TransformBy(LocalToWorld));
-
-	Ret.BoxExtent *= BoundsScale;
-	Ret.SphereRadius *= BoundsScale;
-
-	return Ret;
-}
-
-
-#endif
-
 /** Resource array to pass  */
 class FGeoClipMeshVertexResourceArray : public FResourceArrayInterface
 {
@@ -518,6 +455,7 @@ public:
 					if (VisibilityMap & (1 << ViewIndex))
 					{
 						const FSceneView* View = Views[ViewIndex];
+						
 						// Draw the mesh.
 						FMeshBatch& Mesh = Collector.AllocateMesh();
 						FMeshBatchElement& BatchElement = Mesh.Elements[0];

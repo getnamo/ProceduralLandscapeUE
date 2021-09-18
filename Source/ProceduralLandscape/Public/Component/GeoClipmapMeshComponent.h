@@ -313,36 +313,13 @@ public:
 
 
 
-
-#if 0
-public:
-
-	UPROPERTY()
-	bool UseCustomBounds;
-
-	void SetLocalBound(FBoxSphereBounds NewBound);
-	void UpdateCustomBound();
-
-
-private:
-	//~ Begin USceneComponent Interface.
-	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
-	//~ Begin USceneComponent Interface.
-
-	/** Local space bounds of mesh */
-	UPROPERTY()
-	FBoxSphereBounds LocalBoundsGeoC;
-
-	/** Local space bounds of mesh */
-	UPROPERTY()
-	FBoxSphereBounds LocalBoundsStandard;
-#endif
-
 	FBoxSphereBounds GetLocalBounds(){return LocalBounds;};
 
 	void SetTargetHeight(float THeight){TargetHeight=THeight;};
 
 private:
+
+
 	//~ Begin USceneComponent Interface.
 	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
 	//~ Begin USceneComponent Interface.

@@ -216,7 +216,7 @@ void AGeometryClipMapWorld::Setup()
 		{
 			Spawnable.CleanUp();
 		}
-
+		SortedSpawnables.Empty();
 		
 
 		rebuild = false;
@@ -231,6 +231,7 @@ void AGeometryClipMapWorld::Setup()
 		{
 			Spawnable.CleanUp();
 		}
+		SortedSpawnables.Empty();
 		rebuildVegetationOnly=false;
 	}
 }
@@ -749,9 +750,13 @@ void AGeometryClipMapWorld::UpdateCameraLocation()
 			{
 				check(IsInGameThread());
 				Cameras = &World->ViewLocationsRenderedLastFrame;
-				OldCameras = *Cameras;
+				OldCameras = *Cameras;				
 
 				CamLocation=World->ViewLocationsRenderedLastFrame[0];
+
+				//UGameViewportClient* GVP = World->GetGameViewport();
+				
+
 			}
 		}
 	}
@@ -1308,7 +1313,7 @@ void AGeometryClipMapWorld::ProcessSpawnablePending()
 {
 	for (FSpawnableMesh& Spawn : Spawnables)
 	{
-		//Spawn.SpawnablesElemReadToProcess
+		
 		for (int& ElID : Spawn.SpawnablesElemReadToProcess)
 		{
 			//Spawn.SpawnablesElem
@@ -1345,7 +1350,9 @@ void AGeometryClipMapWorld::ProcessSpawnablePending()
 
 			});
 
-		
+		/**
+		* We allow actors to be destroyed. If the actor was destroyed, spawn a new one, otherwise move a preexisting one.
+		*/
 
 			if(Mesh.InstancesIndexes.Num()>0)
 			{
@@ -1365,8 +1372,10 @@ void AGeometryClipMapWorld::ProcessSpawnablePending()
 						for (int j = 0; j < InstancesT[i].Num(); j++)
 						{				
 							FTransform& T = InstancesT[i][j];
-							if(T.GetScale3D().X>0.f)
+							if(T.GetScale3D().X>0.0001f)
 							{
+								
+
 								if (AActor* Local_Actor = SAL.SpawnedActors[FirstIndice + j])
 								{									
 									Local_Actor->SetActorTransform(T, false, nullptr, ETeleportType::TeleportPhysics);
@@ -1375,10 +1384,8 @@ void AGeometryClipMapWorld::ProcessSpawnablePending()
 								{
 									FActorSpawnParameters ActorSpawnParameters;
 									ActorSpawnParameters.ObjectFlags=RF_Transient;
-									if (Spawn.ActorSpawningMethod == EActorSpawningMethod::Direct)
-										SAL.SpawnedActors[FirstIndice + j] = GetWorld()->SpawnActorAbsolute(Spawn.Actors_Validated[i], T,ActorSpawnParameters);
-									else
-										SAL.SpawnedActors[FirstIndice + j] = GetWorld()->SpawnActorDeferred<AActor>(Spawn.Actors_Validated[i],T ,nullptr,nullptr,ESpawnActorCollisionHandlingMethod::Undefined);
+									
+									SAL.SpawnedActors[FirstIndice + j] = GetWorld()->SpawnActorAbsolute(Spawn.Actors_Validated[i], T,ActorSpawnParameters);									
 								}
 							}
 							
@@ -1410,15 +1417,13 @@ void AGeometryClipMapWorld::ProcessSpawnablePending()
 							Mesh.InstancesIndexes[i].InstancesIndexes.Add(SAL.SpawnedActors.Num());
 							
 							FTransform& T = InstancesT[i][j];
-							if (T.GetScale3D().X > 0.f)
+							if (T.GetScale3D().X > 0.0001f)
 							{
 								FActorSpawnParameters ActorSpawnParameters;
 								ActorSpawnParameters.ObjectFlags = RF_Transient;
-
-								if (Spawn.ActorSpawningMethod == EActorSpawningMethod::Direct)
-									SAL.SpawnedActors.Add(GetWorld()->SpawnActorAbsolute(Spawn.Actors_Validated[i], T,ActorSpawnParameters));
-								else
-									SAL.SpawnedActors.Add(GetWorld()->SpawnActorDeferred<AActor>(Spawn.Actors_Validated[i], T, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::Undefined));
+								
+								SAL.SpawnedActors.Add(GetWorld()->SpawnActorAbsolute(Spawn.Actors_Validated[i], T,ActorSpawnParameters));								
+								
 							}
 							else 
 								SAL.SpawnedActors.Add(nullptr);
@@ -1486,6 +1491,8 @@ FCollisionMeshElement& AGeometryClipMapWorld::GetACollisionMesh()
 	UWorld* World = GetWorld();
 
 	uint32 SizeT = (uint32)CollisionMeshVerticeNumber;
+
+	RendertargetMemoryBudgetMB+=(SizeT*SizeT*4)/1000000.0f;
 
 	NewElem.CollisionRT = UKismetRenderingLibrary::CreateRenderTarget2D(World, SizeT, SizeT, RTF_RGBA8,
 		FLinearColor(0, 0, 0, 1), false);
@@ -1557,6 +1564,8 @@ void AGeometryClipMapWorld::InitiateWorld()
 	if(Meshes.Num()>0)
 		return;
 
+	RendertargetMemoryBudgetMB=0;
+
 	GridSpacing=WorldDimensionMeters*100/(N-1);
 
 	for(int i=0; i<LOD_Num;i++)
@@ -1576,6 +1585,8 @@ void AGeometryClipMapWorld::InitiateWorld()
 
 		if(EnableCaching)
 		{
+			RendertargetMemoryBudgetMB+=2*(CacheRes*CacheRes*4)/1000000.0f;
+
 			NewElem.HeightMap = UKismetRenderingLibrary::CreateRenderTarget2D(GetWorld(), CacheRes, CacheRes, RTF_RGBA8, FLinearColor(0, 0, 0, 1), false);
 #if !WITH_EDITOR
 			NewElem.HeightMap->AddToRoot();
@@ -1597,7 +1608,8 @@ void AGeometryClipMapWorld::InitiateWorld()
 			{
 				if(layer.LayerName!="" && layer.MaterialToGenerateLayer)
 				{
-				
+					RendertargetMemoryBudgetMB+=(CacheRes*CacheRes*4)/1000000.0f;
+
 					UTextureRenderTarget2D* Layer = UKismetRenderingLibrary::CreateRenderTarget2D(GetWorld(), CacheRes, CacheRes, RTF_RGBA8, FLinearColor(0, 0, 0, 1), false);
 #if !WITH_EDITOR
 					Layer->AddToRoot();
@@ -2255,9 +2267,89 @@ void AGeometryClipMapWorld::InitiateWorld()
 		DataReceiver->UpdateStaticDataFor(this);
 }
 
+void AGeometryClipMapWorld::Merge_SortList(TArray<int>& SourceList)
+{
+	if (SourceList.Num() == 0 || SourceList.Num() == 1)
+		return;
+
+
+	int MidIndex = SourceList.Num()/2;
+
+	TArray<int> UnSortedList_Left;
+
+	TArray<int> UnSortedList_Right;
+
+	for (int i = 0; i < SourceList.Num(); i++)
+	{
+		if (i < MidIndex)
+			UnSortedList_Left.Add(SourceList[i]);
+		else
+			UnSortedList_Right.Add(SourceList[i]);
+	}
+
+	Merge_SortList(UnSortedList_Left);	
+	Merge_SortList(UnSortedList_Right);
+
+	TArray<int> Sorted_List;
+	Sorted_List.Empty();
+
+	while(UnSortedList_Left.Num()>0 && UnSortedList_Right.Num()>0)
+	{
+		if(Spawnables[UnSortedList_Left[0]].RegionWorldDimension>Spawnables[UnSortedList_Right[0]].RegionWorldDimension)
+		{
+			Sorted_List.Add(UnSortedList_Right[0]);
+			UnSortedList_Right.RemoveAt(0);			
+		}
+		else
+		{
+			Sorted_List.Add(UnSortedList_Left[0]);
+			UnSortedList_Left.RemoveAt(0);
+		}
+	}
+
+	if(UnSortedList_Left.Num()>0)
+		Sorted_List.Append(UnSortedList_Left);
+
+	UnSortedList_Left.Empty();
+
+	if (UnSortedList_Right.Num() > 0)
+		Sorted_List.Append(UnSortedList_Right);
+
+	UnSortedList_Right.Empty();
+
+	for (int i = 0; i < SourceList.Num(); i++)
+	{
+		SourceList[i] = Sorted_List[i];
+	}
+
+}
+
+
+void AGeometryClipMapWorld::SortSpawnabledBySurface()
+{
+	SortedSpawnables.Empty();
+
+	if (Spawnables.Num() == 1)
+	{
+		SortedSpawnables.Add(0);
+		return;
+	}
+
+	for (int i = 0; i < Spawnables.Num(); i++)
+	{		
+		SortedSpawnables.Add(i);
+	}
+	
+	Merge_SortList(SortedSpawnables);	
+	
+}
 
 void AGeometryClipMapWorld::UpdateSpawnables()
 {
+
+	if(SortedSpawnables.Num()==0 && Spawnables.Num()>0)
+		SortSpawnabledBySurface();
+
 	bool SkipToLastStop = false;
 	if(Spawnable_Stopped_indice>=0 )
 	{
@@ -2313,6 +2405,7 @@ void AGeometryClipMapWorld::UpdateSpawnables()
 
 				Spawn.AvailableSpawnablesElem.Add(El.ID);	
 				Spawn.UsedSpawnablesElem.RemoveAt(i);
+				El.ComputeLaunched=true;
 
 				for (auto It = Spawn.SpawnablesLayout.CreateConstIterator(); It; ++It)
 				{
@@ -2353,13 +2446,14 @@ void AGeometryClipMapWorld::UpdateSpawnables()
 
 				if (!Spawn.SpawnablesLayout.Contains(LocMeshInt))
 				{
-					if(CanUpdateSpawnables())
+					if(true /*|| CanUpdateSpawnables()*/)
 					{
 						FSpawnableMeshElement& Mesh = Spawn.GetASpawnableElem();
+						Mesh.ComputeLaunched=false;
 
 						Mesh.Location = MeshLoc;
 
-						Spawn.UpdateSpawnableData(Mesh);
+						//Spawn.UpdateSpawnableData(Mesh);
 
 						Spawn.SpawnablesLayout.Add(LocMeshInt, Mesh.ID);
 					}
@@ -2383,6 +2477,40 @@ void AGeometryClipMapWorld::UpdateSpawnables()
 			break;
 		}
 	}
+
+	// The computation grid is up to date
+	// Sort the FSpawnableMeshElement requiring computation by priority order based on their surface and frustrum inclusion
+
+	bool InterruptUpdate = false;
+
+	for (int& indice : SortedSpawnables)
+	{
+		FSpawnableMesh& Spawn = Spawnables[indice];
+		for(int& indice_used : Spawn.UsedSpawnablesElem)
+		{
+			FSpawnableMeshElement& Mesh = Spawn.SpawnablesElem[indice_used];
+
+			if(!Mesh.ComputeLaunched)
+			{
+
+				if(CanUpdateSpawnables())
+				{
+					Mesh.ComputeLaunched=true;
+					Spawn.UpdateSpawnableData(Mesh);
+				}
+				else
+				{
+					InterruptUpdate=true;
+					break;
+				}
+			}
+		}
+		if (InterruptUpdate)
+		{
+			break;
+		}
+	}
+
 }
 
 
@@ -2434,6 +2562,8 @@ FSpawnableMeshElement& FSpawnableMesh::GetASpawnableElem()
 	UWorld* World = Owner->GetWorld();
 
 	uint32 SizeT = (uint32)RT_Dim;
+
+	Owner->RendertargetMemoryBudgetMB+=4*(SizeT*SizeT*4)/1000000.0f;
 
 	NewElem.LocationX = UKismetRenderingLibrary::CreateRenderTarget2D(World, SizeT, SizeT, RTF_RGBA8, FLinearColor(0, 0, 0, 1), false);
 #if !WITH_EDITOR
@@ -2726,6 +2856,9 @@ void FSpawnableMesh::CleanUp()
 	
 	for(FSpawnableMeshElement& El:SpawnablesElem)
 	{
+		if(El.LocationX && Owner)
+			Owner->RendertargetMemoryBudgetMB-=4*(El.LocationX->SizeX *El.LocationX->SizeX*4)/1000000.0f;
+
 		if (El.LocationX->IsRooted())
 			El.LocationX->RemoveFromRoot();
 		if (El.LocationY->IsRooted())

@@ -11,6 +11,13 @@
 	"MarketplaceURL": "",
 	"SupportURL": "",
 	"CanContainContent": true,
+	"SupportedTargetPlatforms": [
+		"IOS",
+		"Win64",
+		"Mac",
+		"Android",
+		"Linux"
+	],
 	"IsBetaVersion": false,
 	"IsExperimentalVersion": false,
 	"Installed": false,
