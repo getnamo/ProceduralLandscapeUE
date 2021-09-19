@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "ConvexVolume.h"
 #include "GeometryClipMapWorld.generated.h"
 
 class UProceduralMeshComponent;

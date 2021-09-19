@@ -10,10 +10,11 @@
 	"DocsURL": "",
 	"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/519f5dc62d714ba8b116e4763ba1e542",
 	"SupportURL": "",
-	"EngineVersion": "4.27.0",
+	"EngineVersion": "4.26.0",
 	"CanContainContent": true,
 	"SupportedTargetPlatforms": [
 		"IOS",
+		"Win32",
 		"Win64",
 		"Mac",
 		"Android",

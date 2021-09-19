@@ -400,6 +400,8 @@ void AGeometryClipMapWorld::PostEditChangeProperty(FPropertyChangedEvent& Proper
 			PropName == TEXT("WorldDimensionMeters")|| 
 			PropName == TEXT("WorldPresentation")|| 
 			PropName == TEXT("LandDataLayers") ||
+			PropName == TEXT("CollisionMeshVerticeNumber") ||
+			PropName == TEXT("LOD_above_doubleCacheResolution") ||
 			PropName == TEXT("CollisionMeshPerQuadrantAroundPlayer"))
 		{
 			rebuild=true;
@@ -750,22 +752,9 @@ void AGeometryClipMapWorld::UpdateCameraLocation()
 
 	UWorld* World = GetWorld();
 
-	static TArray<FVector> OldCameras;
-	TArray<FVector>* Cameras = nullptr;
-
-	if (OldCameras.Num() || World->ViewLocationsRenderedLastFrame.Num())
+	if (World && World->ViewLocationsRenderedLastFrame.Num())
 	{
-		Cameras = &OldCameras;
-		// there is a bug here, which often leaves us with no cameras in the editor
-		if (World->ViewLocationsRenderedLastFrame.Num())
-		{
-			check(IsInGameThread());
-			Cameras = &World->ViewLocationsRenderedLastFrame;
-			OldCameras = *Cameras;				
-
-			CamLocation=World->ViewLocationsRenderedLastFrame[0];
-
-		}
+		CamLocation = World->ViewLocationsRenderedLastFrame[0];		
 	}
 	
 }
@@ -1088,11 +1077,18 @@ double AGeometryClipMapWorld::GetHeightFromGPURead(FColor& ReadLoc)
 void AGeometryClipMapWorld::ProcessCollisionsPending()
 {
 	//TODO add physic material support ?
+	if (rebuild)
+		return;
 
 	for(int& ElID : CollisionReadToProcess)
 	{
 	
 		FCollisionMeshElement& Mesh = CollisionMesh[ElID];
+		if (!Mesh.Mesh)
+		{
+			rebuild = true;
+			return;
+		}
 
 		FVector MesgLoc = Mesh.Mesh->GetComponentLocation();
 		//SetProcMeshSection
@@ -1301,6 +1297,9 @@ FTransform AGeometryClipMapWorld::GetLocalTransformOfSpawnable(const FVector& Co
 
 void AGeometryClipMapWorld::ProcessSpawnablePending()
 {
+	if (rebuild)
+		return;
+
 	for (FSpawnableMesh& Spawn : Spawnables)
 	{
 		
