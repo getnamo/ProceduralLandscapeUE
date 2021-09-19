@@ -406,7 +406,8 @@ void AGeometryClipMapWorld::PostEditChangeProperty(FPropertyChangedEvent& Proper
 			PropName == TEXT("ClipMapCacheIntraVerticesTexel")|| 
 			PropName == TEXT("WorldDimensionMeters")|| 
 			PropName == TEXT("WorldPresentation")|| 
-			PropName == TEXT("LandDataLayers"))
+			PropName == TEXT("LandDataLayers") ||
+			PropName == TEXT("CollisionMeshPerQuadrantAroundPlayer"))
 		{
 			rebuild=true;
 		}
@@ -1043,7 +1044,7 @@ void AGeometryClipMapWorld::UpdateCollisionMesh()
 		{
 			FCollisionMeshElement& El = CollisionMesh[UsedCollisionMesh[i]];
 			FVector ToComp = (El.Mesh->GetComponentLocation()-LocRef)/CollisionMeshWorldDimension;
-			if(FMath::Abs(ToComp.X)>CollisionMeshPerQuadrantAroundPlayer || FMath::Abs(ToComp.Y)>CollisionMeshPerQuadrantAroundPlayer)
+			if(FMath::Abs(ToComp.X)>CollisionMeshPerQuadrantAroundPlayer+.1f || FMath::Abs(ToComp.Y)>CollisionMeshPerQuadrantAroundPlayer+.1f)
 			{
 				
 				
@@ -1226,6 +1227,8 @@ void AGeometryClipMapWorld::UpdateCollisionMeshData(FCollisionMeshElement& Mesh)
 
 		UMaterialInstanceDynamic* DynCollisionMat = UMaterialInstanceDynamic::Create(CollisionMat_HeightRead, this);
 		DynCollisionMat->SetVectorParameterValue("MeshLocation",MesgLoc);
+		DynCollisionMat->SetScalarParameterValue("CollisionVerticeNum",CollisionMeshVerticeNumber);
+		DynCollisionMat->SetScalarParameterValue("CollisionDimension",CollisionMeshWorldDimension);
 		DynCollisionMat->SetScalarParameterValue("MeshScale",CollisionMeshWorldDimension*(CollisionMeshVerticeNumber<=1? 1 :CollisionMeshVerticeNumber/(CollisionMeshVerticeNumber-1)));
 		UKismetRenderingLibrary::ClearRenderTarget2D(this, Mesh.CollisionRT, FLinearColor::Black);
 		//Mesh.CollisionRT->UpdateResourceImmediate();
