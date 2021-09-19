@@ -17,13 +17,6 @@
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "Component/GeoClipmapMeshComponent.h"
 
-/*
-static int32 GUseStreamingManagerForCameras = 0;
-static FAutoConsoleVariableRef CVarProcLandUseStreamingManagerForCameras(
-	TEXT("ProcLand.UseStreamingManagerForCameras"),
-	GUseStreamingManagerForCameras,
-	TEXT("1: Use Streaming Manager; 0: Use ViewLocationsRenderedLastFrame"));
-*/
 
 // Sets default values
 AGeometryClipMapWorld::AGeometryClipMapWorld(const FObjectInitializer& ObjectInitializer)
@@ -754,52 +747,27 @@ void AGeometryClipMapWorld::UpdateViewFrustum()
 
 void AGeometryClipMapWorld::UpdateCameraLocation()
 {
-	int GUseStreamingManagerForCameras = 0;
 
 	UWorld* World = GetWorld();
 
 	static TArray<FVector> OldCameras;
 	TArray<FVector>* Cameras = nullptr;
-	if (GUseStreamingManagerForCameras == 0)
+
+	if (OldCameras.Num() || World->ViewLocationsRenderedLastFrame.Num())
 	{
-		if (OldCameras.Num() || World->ViewLocationsRenderedLastFrame.Num())
+		Cameras = &OldCameras;
+		// there is a bug here, which often leaves us with no cameras in the editor
+		if (World->ViewLocationsRenderedLastFrame.Num())
 		{
-			Cameras = &OldCameras;
-			// there is a bug here, which often leaves us with no cameras in the editor
-			if (World->ViewLocationsRenderedLastFrame.Num())
-			{
-				check(IsInGameThread());
-				Cameras = &World->ViewLocationsRenderedLastFrame;
-				OldCameras = *Cameras;				
+			check(IsInGameThread());
+			Cameras = &World->ViewLocationsRenderedLastFrame;
+			OldCameras = *Cameras;				
 
-				CamLocation=World->ViewLocationsRenderedLastFrame[0];
+			CamLocation=World->ViewLocationsRenderedLastFrame[0];
 
-				//UGameViewportClient* GVP = World->GetGameViewport();
-				
-
-			}
 		}
 	}
-	else
-	{
-		int32 Num = IStreamingManager::Get().GetNumViews();
-		if (Num)
-		{
-			CamLocation=IStreamingManager::Get().GetViewInformation(0).ViewOrigin;
-			/*
-			OldCameras.Reset(Num);
-			for (int32 Index = 0; Index < Num; Index++)
-			{
-				auto& ViewInfo = IStreamingManager::Get().GetViewInformation(Index);
-				OldCameras.Add(ViewInfo.ViewOrigin);
-
-				if(Index==0)
-					CamLocation=ViewInfo.ViewOrigin;
-			}
-			Cameras = &OldCameras;
-			*/
-		}
-	}
+	
 }
 
 float AGeometryClipMapWorld::HeightToClosestCollisionMesh()
