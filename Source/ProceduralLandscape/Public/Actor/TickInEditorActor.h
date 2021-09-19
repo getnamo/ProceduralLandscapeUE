@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+//Copyright Maxime Dupart 2021  https://twitter.com/Max_Dupt
 
 #pragma once
 

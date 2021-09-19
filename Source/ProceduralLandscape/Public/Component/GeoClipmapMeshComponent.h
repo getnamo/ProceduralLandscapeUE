@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+//Copyright Maxime Dupart 2021  https://twitter.com/Max_Dupt
 
 #pragma once
 
@@ -12,6 +12,7 @@
 
 
 class FPrimitiveSceneProxy;
+struct FConvexVolume;
 
 DECLARE_STATS_GROUP(TEXT("GeoClipProceduralMesh"), STATGROUP_GeoClipProceduralMesh, STATCAT_Advanced);
 
@@ -317,6 +318,8 @@ public:
 
 	void SetTargetHeight(float THeight){TargetHeight=THeight;};
 
+	TArray<FConvexVolume> GetViewsFrustums();
+
 private:
 
 
@@ -357,6 +360,8 @@ private:
 
 	UPROPERTY()
 		float TargetHeight=0.f;
+
+	TArray<FConvexVolume> ViewsFrustums;
 	
 	/** Queue for async body setups that are being cooked */
 	UPROPERTY(transient)

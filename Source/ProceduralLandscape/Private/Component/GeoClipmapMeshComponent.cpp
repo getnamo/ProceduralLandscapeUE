@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+//Copyright Maxime Dupart 2021  https://twitter.com/Max_Dupt
 
 // Copyright Epic Games, Inc. All Rights Reserved. 
 #include "Component/GeoClipmapMeshComponent.h"
@@ -115,6 +115,10 @@ static void ConvertProcMeshToDynMeshVertex(FDynamicMeshVertex& Vert, const FGeoC
 class FGeoClipProceduralMeshSceneProxy final : public FPrimitiveSceneProxy
 {
 public:
+
+	TArray<FConvexVolume> ViewsFrustums;
+	FThreadSafeBool ViewFrustumAccessMutex;
+
 	SIZE_T GetTypeHash() const override
 	{
 		static size_t UniquePointer;
@@ -442,6 +446,18 @@ public:
 			Collector.RegisterOneFrameMaterialProxy(WireframeMaterialInstance);
 		}
 		*/
+
+		FGeoClipProceduralMeshSceneProxy* Proxy_local = nullptr;
+		
+		if (!ViewFrustumAccessMutex)
+		{
+			Proxy_local = const_cast<FGeoClipProceduralMeshSceneProxy*>(this);
+			
+			if(Proxy_local)
+				Proxy_local->ViewsFrustums.SetNum(Views.Num());
+
+		}
+
 		// Iterate over sections
 		for (const FProcMeshProxySection* Section : Sections)
 		{
@@ -455,6 +471,12 @@ public:
 					if (VisibilityMap & (1 << ViewIndex))
 					{
 						const FSceneView* View = Views[ViewIndex];
+
+						if (!ViewFrustumAccessMutex && View && Proxy_local)
+						{							
+							Proxy_local->ViewsFrustums.Add(View->ViewFrustum);
+						}
+						
 						
 						// Draw the mesh.
 						FMeshBatch& Mesh = Collector.AllocateMesh();
@@ -488,6 +510,9 @@ public:
 				}
 			}
 		}
+
+		if (Proxy_local && !ViewFrustumAccessMutex)
+			Proxy_local->ViewFrustumAccessMutex=true;
 
 		// Draw bounds
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
@@ -660,6 +685,22 @@ void UGeoClipmapMeshComponent::PostLoad()
 	{
 		ProcMeshBodySetup->SetFlags(RF_Public);
 	}
+}
+
+TArray<FConvexVolume> UGeoClipmapMeshComponent::GetViewsFrustums()
+{
+	if (SceneProxy && !IsRenderStateDirty())
+	{
+		FGeoClipProceduralMeshSceneProxy* ProcMeshSceneProxy = (FGeoClipProceduralMeshSceneProxy*)SceneProxy;
+
+		if(ProcMeshSceneProxy && ProcMeshSceneProxy->ViewFrustumAccessMutex)
+		{
+			ViewsFrustums = ProcMeshSceneProxy->ViewsFrustums;	
+			ProcMeshSceneProxy->ViewFrustumAccessMutex=false;
+		}		
+	}
+
+	return ViewsFrustums;
 }
 
 void UGeoClipmapMeshComponent::CreateMeshSection_LinearColor(int32 SectionIndex, const TArray<FVector>& Vertices, const TArray<int32>& Triangles, const TArray<FVector>& Normals, const TArray<FVector2D>& UV0, const TArray<FVector2D>& UV1, const TArray<FVector2D>& UV2, const TArray<FVector2D>& UV3, const TArray<FLinearColor>& VertexColors, const TArray<FGeoCProcMeshTangent>& Tangents, bool bCreateCollision)

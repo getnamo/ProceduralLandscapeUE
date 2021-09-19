@@ -122,6 +122,8 @@ void AGeometryClipMapWorld::Setup()
 	TimeAcu = 0.f;
 	DrawCall_Spawnables_count = 0;
 
+	UpdateViewFrustum();
+
 	UpdateCameraLocation();
 
 	if (GenerateCollision_last != GenerateCollision || VerticalRangeMeters_last != VerticalRangeMeters || Caching_last != EnableCaching)
@@ -732,6 +734,52 @@ void AGeometryClipMapWorld::CreateGridMeshWelded(int LOD, int32 NumX, int32 NumY
 	}
 }
 
+void AGeometryClipMapWorld::UpdateViewFrustum()
+{
+	if(Meshes.Num()>0 && Meshes[0].Mesh)
+	{
+		TArray<FConvexVolume> Frustums = Meshes[0].Mesh->GetViewsFrustums();		
+
+		for(int i=0; i<Frustums.Num();i++)
+		{
+			if(Frustums[i].Planes.Num()>0)
+			{
+				ViewFrustum = Frustums[i];
+			}			
+		}
+		
+		/*
+		if(ViewFrustum.Planes.Num()>0)
+		{
+			if(ViewFrustum.IntersectPoint(FVector(0.f,0.f,0.f)))
+			{
+				UE_LOG(LogTemp,Warning,TEXT("intersect FVector(0.f,0.f,0.f)"));	
+			}
+
+			if (ViewFrustum.IntersectPoint(FVector(10000.f, 0.f, 0.f)))
+			{
+				UE_LOG(LogTemp, Warning, TEXT("intersect FVector(10000.f,0.f,0.f)"));
+			}
+
+			if (ViewFrustum.IntersectPoint(FVector(-10000.f, 0.f, 0.f)))
+			{
+				UE_LOG(LogTemp, Warning, TEXT("intersect FVector(-10000.f,0.f,0.f)"));
+			}
+
+			if (ViewFrustum.IntersectPoint(FVector(0.f, 10000.f, 0.f)))
+			{
+				UE_LOG(LogTemp, Warning, TEXT("intersect FVector(0.f, 10000.f, 0.f)"));
+			}
+
+			if (ViewFrustum.IntersectPoint(FVector(0.f, -10000.f, 0.f)))
+			{
+				UE_LOG(LogTemp, Warning, TEXT("intersect FVector(0.f, -10000.f, 0.f)"));
+			}
+		}
+		*/
+	}
+}
+
 void AGeometryClipMapWorld::UpdateCameraLocation()
 {
 	int GUseStreamingManagerForCameras = 0;
@@ -1207,7 +1255,7 @@ void AGeometryClipMapWorld::UpdateCollisionMeshData(FCollisionMeshElement& Mesh)
 
 		UMaterialInstanceDynamic* DynCollisionMat = UMaterialInstanceDynamic::Create(CollisionMat_HeightRead, this);
 		DynCollisionMat->SetVectorParameterValue("MeshLocation",MesgLoc);
-		DynCollisionMat->SetScalarParameterValue("MeshScale",CollisionMeshWorldDimension*CollisionMeshVerticeNumber/(CollisionMeshVerticeNumber-1));
+		DynCollisionMat->SetScalarParameterValue("MeshScale",CollisionMeshWorldDimension*(CollisionMeshVerticeNumber<=1? 1 :CollisionMeshVerticeNumber/(CollisionMeshVerticeNumber-1)));
 		UKismetRenderingLibrary::ClearRenderTarget2D(this, Mesh.CollisionRT, FLinearColor::Black);
 		//Mesh.CollisionRT->UpdateResourceImmediate();
 
@@ -1323,6 +1371,8 @@ void AGeometryClipMapWorld::ProcessSpawnablePending()
 			
 			const int NumOfVertex = Spawn.RT_Dim*Spawn.RT_Dim;
 
+			
+
 			// The idea is that if we use instanced meshes, their transform are computed in local space, while actors require world space			
 			const FVector CompLocation = Spawn.SpawnType == ESpawnableType::Mesh ? GetActorLocation() : FVector(0.f,0.f,0.f);
 
@@ -1340,15 +1390,26 @@ void AGeometryClipMapWorld::ProcessSpawnablePending()
 				T.SetNum(Spawn.NumInstancePerHIM[i], false);
 			}
 
-			ParallelFor(NumOfVertex, [&](int32 k)
+			if(NumOfVertex<5)
 			{
-				if (k < NumOfVertex)
-				{	
-					(InstancesT[Spawn.InstanceIndexToHIMIndex[k]])[Spawn.InstanceIndexToIndexForHIM[k]]=GetLocalTransformOfSpawnable(CompLocation,Mesh.LocationXData[k],Mesh.LocationYData[k],Mesh.LocationZData[k],Mesh.RotationData[k]);				
-
+				for(int k=0;k<NumOfVertex;k++)
+				{
+					(InstancesT[Spawn.InstanceIndexToHIMIndex[k]])[Spawn.InstanceIndexToIndexForHIM[k]] = GetLocalTransformOfSpawnable(CompLocation, Mesh.LocationXData[k], Mesh.LocationYData[k], Mesh.LocationZData[k], Mesh.RotationData[k]);
 				}
+				
+			}
+			else
+			{
+				ParallelFor(NumOfVertex, [&](int32 k)
+				{
+					if (k < NumOfVertex)
+					{
+						(InstancesT[Spawn.InstanceIndexToHIMIndex[k]])[Spawn.InstanceIndexToIndexForHIM[k]] = GetLocalTransformOfSpawnable(CompLocation, Mesh.LocationXData[k], Mesh.LocationYData[k], Mesh.LocationZData[k], Mesh.RotationData[k]);
 
-			});
+					}
+
+				});
+			}
 
 		/**
 		* We allow actors to be destroyed. If the actor was destroyed, spawn a new one, otherwise move a preexisting one.
@@ -1359,7 +1420,7 @@ void AGeometryClipMapWorld::ProcessSpawnablePending()
 				if (Spawn.SpawnType == ESpawnableType::Mesh)
 				for (int i = 0; i < Spawn.HIM_Mesh.Num(); i++)
 				{
-					//TODO why did i put a +1 here - that s wrong ?!
+					//TODO why did i put a +1 here - that s wrong ?!					
 					Spawn.HIM_Mesh[i]->BatchUpdateInstancesTransforms(Mesh.InstanceOffset[i]/*+1*/,InstancesT[i],false,true);
 				}
 				else
@@ -1385,7 +1446,9 @@ void AGeometryClipMapWorld::ProcessSpawnablePending()
 									FActorSpawnParameters ActorSpawnParameters;
 									ActorSpawnParameters.ObjectFlags=RF_Transient;
 									
-									SAL.SpawnedActors[FirstIndice + j] = GetWorld()->SpawnActorAbsolute(Spawn.Actors_Validated[i], T,ActorSpawnParameters);									
+									//SAL.SpawnedActors[FirstIndice + j] = GetWorld()->SpawnActorAbsolute(Spawn.Actors_Validated[i], T,ActorSpawnParameters);	
+									AActor* SpawnedActor = GetWorld()->SpawnActor(Spawn.Actors_Validated[i].Get(), &T, ActorSpawnParameters);
+									SAL.SpawnedActors[FirstIndice + j] = SpawnedActor;
 								}
 							}
 							
@@ -1420,9 +1483,12 @@ void AGeometryClipMapWorld::ProcessSpawnablePending()
 							if (T.GetScale3D().X > 0.0001f)
 							{
 								FActorSpawnParameters ActorSpawnParameters;
-								ActorSpawnParameters.ObjectFlags = RF_Transient;
+								ActorSpawnParameters.ObjectFlags = RF_Transient;								
 								
-								SAL.SpawnedActors.Add(GetWorld()->SpawnActorAbsolute(Spawn.Actors_Validated[i], T,ActorSpawnParameters));								
+								//SAL.SpawnedActors.Add(GetWorld()->SpawnActorAbsolute(Spawn.Actors_Validated[i], T,ActorSpawnParameters));
+								
+								AActor* SpawnedActor = GetWorld()->SpawnActor(Spawn.Actors_Validated[i].Get(), &T,ActorSpawnParameters);
+								SAL.SpawnedActors.Add(SpawnedActor);
 								
 							}
 							else 
@@ -1524,7 +1590,7 @@ FCollisionMeshElement& AGeometryClipMapWorld::GetACollisionMesh()
 	TArray<int32> Triangles;
 	TArray<FVector2D> UV;
 
-	float Spacing = CollisionMeshWorldDimension/(CollisionMeshVerticeNumber-1);
+	float Spacing = CollisionMeshWorldDimension/(CollisionMeshVerticeNumber<=1? 1:CollisionMeshVerticeNumber-1);
 
 	UKismetProceduralMeshLibrary::CreateGridMeshWelded(CollisionMeshVerticeNumber,CollisionMeshVerticeNumber,Triangles,Vertices,UV,Spacing);
 
@@ -2138,7 +2204,7 @@ void AGeometryClipMapWorld::InitiateWorld()
 			NewElem.CacheMatDyn->AddToRoot();
 #endif
 			NewElem.CacheMatDyn->SetVectorParameterValue("RingLocation", NewElem.Location);
-			NewElem.CacheMatDyn->SetScalarParameterValue("MeshScale", (N - 1) * NewElem.GridSpacing * CacheRes / (CacheRes - 1));
+			NewElem.CacheMatDyn->SetScalarParameterValue("MeshScale", (N - 1) * NewElem.GridSpacing * (CacheRes<=1?1: CacheRes / (CacheRes - 1)));
 			NewElem.CacheMatDyn->SetScalarParameterValue("N", N);
 			NewElem.CacheMatDyn->SetScalarParameterValue("CacheRes", CacheRes);
 			NewElem.CacheMatDyn->SetScalarParameterValue("LocalGridScaling", NewElem.GridSpacing);
@@ -2161,7 +2227,7 @@ void AGeometryClipMapWorld::InitiateWorld()
 
 					// required for Position to UV coord
 					LayerDynMat->SetVectorParameterValue("RingLocation", NewElem.Location);
-					LayerDynMat->SetScalarParameterValue("MeshScale", (N - 1) * NewElem.GridSpacing * CacheRes / (CacheRes - 1));
+					LayerDynMat->SetScalarParameterValue("MeshScale", (N - 1) * NewElem.GridSpacing * (CacheRes<=1?1: CacheRes / (CacheRes - 1)));
 					LayerDynMat->SetScalarParameterValue("N", N);
 					LayerDynMat->SetScalarParameterValue("CacheRes", CacheRes);
 					LayerDynMat->SetScalarParameterValue("LocalGridScaling", NewElem.GridSpacing);
@@ -2228,7 +2294,7 @@ void AGeometryClipMapWorld::InitiateWorld()
 			
 
 			NewElem.MatDyn->SetVectorParameterValue("RingLocation", NewElem.Location);
-			NewElem.MatDyn->SetScalarParameterValue("MeshScale", (N - 1) * NewElem.GridSpacing * CacheRes / (CacheRes - 1));
+			NewElem.MatDyn->SetScalarParameterValue("MeshScale", (N - 1) * NewElem.GridSpacing * (CacheRes<=1?1: CacheRes / (CacheRes - 1)));
 			NewElem.MatDyn->SetScalarParameterValue("N", N);
 			NewElem.MatDyn->SetScalarParameterValue("LocalGridScaling", NewElem.GridSpacing);
 			NewElem.MatDyn->SetScalarParameterValue("CacheRes", CacheRes);
@@ -2295,7 +2361,7 @@ void AGeometryClipMapWorld::Merge_SortList(TArray<int>& SourceList)
 
 	while(UnSortedList_Left.Num()>0 && UnSortedList_Right.Num()>0)
 	{
-		if(Spawnables[UnSortedList_Left[0]].RegionWorldDimension>Spawnables[UnSortedList_Right[0]].RegionWorldDimension)
+		if(Spawnables[UnSortedList_Left[0]].RegionWorldDimension<Spawnables[UnSortedList_Right[0]].RegionWorldDimension)
 		{
 			Sorted_List.Add(UnSortedList_Right[0]);
 			UnSortedList_Right.RemoveAt(0);			
@@ -2344,72 +2410,44 @@ void AGeometryClipMapWorld::SortSpawnabledBySurface()
 	
 }
 
-void AGeometryClipMapWorld::UpdateSpawnables()
+bool AGeometryClipMapWorld::UpdateSpawnable(int indice, bool MustBeInFrustum)
 {
+	FSpawnableMesh& Spawn = Spawnables[indice];
 
-	if(SortedSpawnables.Num()==0 && Spawnables.Num()>0)
-		SortSpawnabledBySurface();
 
-	bool SkipToLastStop = false;
-	if(Spawnable_Stopped_indice>=0 )
-	{
-		if(Spawnables.Num()>Spawnable_Stopped_indice)
-			SkipToLastStop = true;		
-		
-		if(!SkipToLastStop)
-		{			
-			Spawnable_Stopped_indice=-1;
-		}
+
+	if (Spawn.SpawnType == ESpawnableType::Mesh && (Spawn.Mesh.Num() == 0 || Spawn.Mesh.Num() > 0 && !Spawn.Mesh[0]) ||
+		Spawn.SpawnType == ESpawnableType::Actor && (Spawn.Actors.Num() == 0 || Spawn.Actors.Num() > 0 && !(*Spawn.Actors[0])))
+		return true;
+
 			
-	}
+	if (!Spawn.Owner)
+		Spawn.Initiate(this);
 
-	int Indice_spawnable = -1;
-
-	for (FSpawnableMesh& Spawn : Spawnables)
-	{
-		Indice_spawnable++;
-		
-		if (Spawn.SpawnType==ESpawnableType::Mesh &&( Spawn.Mesh.Num()==0 || Spawn.Mesh.Num()>0 && !Spawn.Mesh[0])||
-			Spawn.SpawnType==ESpawnableType::Actor && ( Spawn.Actors.Num()==0 || Spawn.Actors.Num()>0 && !(*Spawn.Actors[0])))
-			continue;
-		if (!Spawn.Owner)
-			Spawn.Initiate(this);
-
-		if(SkipToLastStop && Indice_spawnable<Spawnable_Stopped_indice)
-			continue;
-		else if(SkipToLastStop && Indice_spawnable==Spawnable_Stopped_indice )
-		{
-			
-			SkipToLastStop=false;
-			Spawnable_Stopped_indice=-1;
-		}
-			
-		
-		
 		FVector CompLoc = CamLocation / (Spawn.RegionWorldDimension);
 		int CamX = FMath::Floor(CompLoc.X);
 		int CamY = FMath::Floor(CompLoc.Y);
 
+	//Only necessary to do this once during the initial InFrustum pass
+	if (MustBeInFrustum)
+	{
 
 		FVector LocRef = Spawn.RegionWorldDimension * FVector(CamX, CamY, 0.f) + GetActorLocation().Z * FVector(0.f, 0.f, 1);
 
-		
 		for (int i = Spawn.UsedSpawnablesElem.Num() - 1; i >= 0; i--)
 		{
-			//Spawn.SpawnablesElem
+			
 			FSpawnableMeshElement& El = Spawn.SpawnablesElem[Spawn.UsedSpawnablesElem[i]];
 			FVector ToComp = (El.Location - LocRef) / Spawn.RegionWorldDimension;
 
 			if (FMath::Abs(ToComp.X) > 3.1f || FMath::Abs(ToComp.Y) > 3.1f)
-			{		
-
-				Spawn.AvailableSpawnablesElem.Add(El.ID);	
+			{
+				Spawn.AvailableSpawnablesElem.Add(El.ID);
 				Spawn.UsedSpawnablesElem.RemoveAt(i);
-				El.ComputeLaunched=true;
+				El.ComputeLaunched = true;
 
 				for (auto It = Spawn.SpawnablesLayout.CreateConstIterator(); It; ++It)
 				{
-					
 					if (It->Value == El.ID)
 					{
 						Spawn.SpawnablesLayout.Remove(It->Key);
@@ -2421,94 +2459,95 @@ void AGeometryClipMapWorld::UpdateSpawnables()
 
 		}
 
-		bool InterruptUpdate = false;
+	}
 
-		if (Spawn.IndexOfClipMapForCompute > 0 && Spawn.IndexOfClipMapForCompute < GetMeshNum())
+	bool InterruptUpdate = false;
+
+	if (Spawn.IndexOfClipMapForCompute > 0 && Spawn.IndexOfClipMapForCompute < GetMeshNum())
+	{
+		FClipMapMeshElement& Elem = GetMesh(Spawn.IndexOfClipMapForCompute);
+
+		if (!Elem.IsSectionVisible(0) && !Elem.IsSectionVisible(1))
+			return true;
+	}
+
+	for (int i = -3; i <= 3; i++)
+	{
+		if (InterruptUpdate)
+			break;
+
+		for (int j = -3; j <= 3; j++)
 		{
-			FClipMapMeshElement& Elem = GetMesh(Spawn.IndexOfClipMapForCompute);
 
-			if (!Elem.IsSectionVisible(0) && !Elem.IsSectionVisible(1))
-				continue;
-		}
+			FIntVector LocMeshInt = FIntVector(CamX + i, CamY + j, 0);
 
-		for (int i = -3; i <= 3; i++)
-		{
-			if(InterruptUpdate)
-				break;
+			FVector MeshLoc = Spawn.RegionWorldDimension * FVector(LocMeshInt) + GetActorLocation().Z * FVector(0.f, 0.f, 1);
 
-			for (int j = -3; j <= 3; j++)
+
+			if (!Spawn.SpawnablesLayout.Contains(LocMeshInt))
 			{
-
-				FIntVector LocMeshInt = FIntVector(CamX + i, CamY + j, 0);
-
-				FVector MeshLoc = Spawn.RegionWorldDimension * FVector(LocMeshInt) + GetActorLocation().Z * FVector(0.f, 0.f, 1);
-
-
-				if (!Spawn.SpawnablesLayout.Contains(LocMeshInt))
+				if (!MustBeInFrustum || MustBeInFrustum && (ViewFrustum.Planes.Num() == 0 || ViewFrustum.IntersectBox(MeshLoc, Spawn.ExtentOfMeshElement)))
 				{
-					if(true /*|| CanUpdateSpawnables()*/)
+					if (CanUpdateSpawnables())
 					{
-						FSpawnableMeshElement& Mesh = Spawn.GetASpawnableElem();
-						Mesh.ComputeLaunched=false;
+						FSpawnableMeshElement& Mesh = Spawn.GetASpawnableElem();						
 
 						Mesh.Location = MeshLoc;
 
-						//Spawn.UpdateSpawnableData(Mesh);
+						Spawn.UpdateSpawnableData(Mesh);
 
 						Spawn.SpawnablesLayout.Add(LocMeshInt, Mesh.ID);
 					}
 					else
 					{
-						InterruptUpdate=true;
+						InterruptUpdate = true;
 						break;
 
 					}
-					
-
 				}
+
 
 			}
 
 		}
 
-		if(InterruptUpdate)
-		{			
-			Spawnable_Stopped_indice = Indice_spawnable;
-			break;
-		}
 	}
 
-	// The computation grid is up to date
-	// Sort the FSpawnableMeshElement requiring computation by priority order based on their surface and frustrum inclusion
+	if (InterruptUpdate)
+	{		
+		return false;
+	}
+	return true;
+}
 
-	bool InterruptUpdate = false;
+void AGeometryClipMapWorld::UpdateSpawnables()
+{
 
-	for (int& indice : SortedSpawnables)
+	if(SortedSpawnables.Num()==0 && Spawnables.Num()>0)
+		SortSpawnabledBySurface();
+
+	bool Interrupted = false;
+
+	//Update spawnables in Frustum
+	for (int& indice : SortedSpawnables)		
 	{
-		FSpawnableMesh& Spawn = Spawnables[indice];
-		for(int& indice_used : Spawn.UsedSpawnablesElem)
+		if(!UpdateSpawnable(indice,true))
 		{
-			FSpawnableMeshElement& Mesh = Spawn.SpawnablesElem[indice_used];
-
-			if(!Mesh.ComputeLaunched)
-			{
-
-				if(CanUpdateSpawnables())
-				{
-					Mesh.ComputeLaunched=true;
-					Spawn.UpdateSpawnableData(Mesh);
-				}
-				else
-				{
-					InterruptUpdate=true;
-					break;
-				}
-			}
-		}
-		if (InterruptUpdate)
-		{
+			Interrupted=true;
 			break;
 		}
+
+	}
+
+	// If we were not interrupted then we have remaining draw call budget update spawnables out of frustum	
+	if(!Interrupted)
+	{	
+		for (int& indice : SortedSpawnables)
+		{
+			if (!UpdateSpawnable(indice, false))							
+				break;			
+		}
+	
 	}
 
 }
@@ -2548,16 +2587,6 @@ FSpawnableMeshElement& FSpawnableMesh::GetASpawnableElem()
 
 	FSpawnableMeshElement NewElem;
 	NewElem.ID = SpawnablesElem.Num();
-
-	//TODO remove *2 ? was just set to guarantee some variety
-	if(SpawnType == ESpawnableType::Mesh && NumberOfInstanceToComputePerRegion<HIM_Mesh.Num()*2)
-		NumberOfInstanceToComputePerRegion = HIM_Mesh.Num()*2;
-
-	if(SpawnType == ESpawnableType::Actor && NumberOfInstanceToComputePerRegion<Spawned_Actors.Num())
-		NumberOfInstanceToComputePerRegion = Spawned_Actors.Num();
-
-	RT_Dim = FMath::Floor(FMath::Sqrt((float)NumberOfInstanceToComputePerRegion)) + (FMath::Frac(FMath::Sqrt((float)NumberOfInstanceToComputePerRegion))>0.f?1:0);
-	
 	
 	UWorld* World = Owner->GetWorld();
 
@@ -2694,7 +2723,7 @@ void FSpawnableMesh::UpdateSpawnableData(FSpawnableMeshElement& MeshElem)
 		//
 
 		DynSpawnMat->SetVectorParameterValue("MeshLocation", MesgLoc);
-		DynSpawnMat->SetScalarParameterValue("MeshScale", RegionWorldDimension * RT_Dim / (RT_Dim - 1));
+		DynSpawnMat->SetScalarParameterValue("MeshScale", RegionWorldDimension * (RT_Dim<=1? 1 : RT_Dim / (RT_Dim - 1)));
 
 		DynSpawnMat->SetScalarParameterValue("RT_Dim", RT_Dim);
 		DynSpawnMat->SetScalarParameterValue("OutputRotationScale", 0.f);
@@ -2760,7 +2789,7 @@ void FSpawnableMesh::UpdateSpawnableData(FSpawnableMeshElement& MeshElem)
 void FSpawnableMesh::Initiate(AGeometryClipMapWorld* Owner_)
 {
 	CleanUp();	
-	//(*ClassFilter) == nullptr
+	
 	if(Owner_ && ((SpawnType==ESpawnableType::Mesh && Mesh.Num()>0 && Mesh[0] && HIM_Mesh.Num()==0) 
 				||(SpawnType==ESpawnableType::Actor && Actors.Num()>0 && (*Actors[0])!= nullptr && Spawned_Actors.Num()==0)))
 	{
@@ -2807,8 +2836,20 @@ void FSpawnableMesh::Initiate(AGeometryClipMapWorld* Owner_)
 
 			}
 
-		int RT_Dim_early = FMath::Floor(FMath::Sqrt((float)NumberOfInstanceToComputePerRegion)) + (FMath::Frac(FMath::Sqrt((float)NumberOfInstanceToComputePerRegion))>0.f?1:0);
-		const int NumOfVertex = RT_Dim_early*RT_Dim_early;
+
+		if (NumberOfInstanceToComputePerRegion < PoolItemCount)
+			NumberOfInstanceToComputePerRegion = PoolItemCount;
+		
+		RT_Dim = FMath::Floor(FMath::Sqrt((float)NumberOfInstanceToComputePerRegion)) + (FMath::Frac(FMath::Sqrt((float)NumberOfInstanceToComputePerRegion))>0.f?1:0);
+
+		// Compute grid real world size is : RegionWorldDimension * RT_Dim / (RT_Dim - 1)
+		// To reach top right corner from center of grid we using half this distance in X Y. 
+		// Adding a large Z value to counter our lack of information about the height assets will spawn at
+		
+		ExtentOfMeshElement = FVector(1.f,1.f,0.f)*(RegionWorldDimension * (RT_Dim<=1? 1 : RT_Dim / (RT_Dim - 1)))/2.f + FVector(0.f,0.f,1.f)*(Owner->VerticalRangeMeters*100.f);
+
+
+		const int NumOfVertex = RT_Dim*RT_Dim;
 
 		for(int i=0; i<NumOfVertex;i++)
 		{

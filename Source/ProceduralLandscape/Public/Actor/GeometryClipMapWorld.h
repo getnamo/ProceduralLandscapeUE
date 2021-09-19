@@ -372,6 +372,9 @@ struct FSpawnableMesh
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Collision Settings")
 		int RT_Dim = 30;
 
+	UPROPERTY(Transient)
+		FVector ExtentOfMeshElement;
+
 	/**
 	* Pool of Computed grid
 	*/
@@ -634,8 +637,10 @@ protected:
 	void InitiateWorld();
 	void Merge_SortList(TArray<int>& SourceList);
 	void SortSpawnabledBySurface();
+	bool UpdateSpawnable(int indice, bool MustBeInFrustum);
 	void SetN();
 	void CreateGridMeshWelded(int LOD, int32 NumX, int32 NumY, TArray<int32>& Triangles, TArray<FVector>& Vertices, TArray<FVector2D>& UVs,TArray<FVector2D>& UV1s,TArray<FVector2D>& UV2s, float& GridSpacing, FVector& Offset, uint8 StitchProfil);
+	void UpdateViewFrustum();
 	void UpdateCameraLocation();
 	float HeightToClosestCollisionMesh();
 	void UpdateClipMap();
@@ -657,6 +662,7 @@ protected:
 	FVector CamLocation;
 
 	FRenderCommandFence RTUpdate;
+	FConvexVolume ViewFrustum;
 
 	bool GenerateCollision_last = false;
 	float VerticalRangeMeters_last = 0.f;
