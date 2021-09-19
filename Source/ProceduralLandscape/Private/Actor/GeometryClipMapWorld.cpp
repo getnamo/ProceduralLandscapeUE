@@ -1034,8 +1034,8 @@ void AGeometryClipMapWorld::UpdateCollisionMesh()
 
 
 		FVector CompLoc = CamLocation / (CollisionMeshWorldDimension);
-		int CamX = FMath::Floor(CompLoc.X);
-		int CamY = FMath::Floor(CompLoc.Y);
+		int CamX = FMath::RoundToInt(CompLoc.X);
+		int CamY = FMath::RoundToInt(CompLoc.Y);
 
 
 		FVector LocRef = CollisionMeshWorldDimension * FVector(CamX, CamY, 0.f) + GetActorLocation().Z * FVector(0.f, 0.f, 1);
@@ -2394,8 +2394,8 @@ bool AGeometryClipMapWorld::UpdateSpawnable(int indice, bool MustBeInFrustum)
 		Spawn.Initiate(this);
 
 		FVector CompLoc = CamLocation / (Spawn.RegionWorldDimension);
-		int CamX = FMath::Floor(CompLoc.X);
-		int CamY = FMath::Floor(CompLoc.Y);
+		int CamX = FMath::RoundToInt(CompLoc.X);
+		int CamY = FMath::RoundToInt(CompLoc.Y);
 
 	//Only necessary to do this once during the initial InFrustum pass
 	if (MustBeInFrustum)
