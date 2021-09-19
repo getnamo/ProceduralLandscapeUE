@@ -358,18 +358,20 @@ struct FSpawnableMesh
 	/**
 	* How many instances are we computing per computed grid ?
 	*/
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Collision Settings")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MeshToSpawn")
 		int NumberOfInstanceToComputePerRegion = 65;
 	/**
 	* What are the world dimension of a grid side size? In Unreal Engine unity/cm.
 	*/
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Collision Settings")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MeshToSpawn")
 		float RegionWorldDimension = 6400.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MeshToSpawn",meta=(UIMin = 1, UIMax = 10, ClampMin = 1, ClampMax = 10))
+		int NumberRegionPerQuadrantSide = 3;
 	
 	/**
 	* Given specified information this is the dimension of the rendertarget that will be used to store the computed assets.
 	*/
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Collision Settings")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MeshToSpawn")
 		int RT_Dim = 30;
 
 	UPROPERTY(Transient)

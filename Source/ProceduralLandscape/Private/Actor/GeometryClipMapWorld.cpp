@@ -396,7 +396,8 @@ void AGeometryClipMapWorld::PostEditChangeProperty(FPropertyChangedEvent& Proper
 			PropName == TEXT("Actors")|| 
 			PropName == TEXT("AltitudeRange")|| 
 			PropName == TEXT("ScaleRange")|| 
-			PropName == TEXT("GroundSlopeAngle"))
+			PropName == TEXT("GroundSlopeAngle")||
+			PropName == TEXT("NumberRegionPerQuadrantSide"))			
 		{			
 			rebuildVegetationOnly=true;			
 		}
@@ -747,36 +748,6 @@ void AGeometryClipMapWorld::UpdateViewFrustum()
 				ViewFrustum = Frustums[i];
 			}			
 		}
-		
-		/*
-		if(ViewFrustum.Planes.Num()>0)
-		{
-			if(ViewFrustum.IntersectPoint(FVector(0.f,0.f,0.f)))
-			{
-				UE_LOG(LogTemp,Warning,TEXT("intersect FVector(0.f,0.f,0.f)"));	
-			}
-
-			if (ViewFrustum.IntersectPoint(FVector(10000.f, 0.f, 0.f)))
-			{
-				UE_LOG(LogTemp, Warning, TEXT("intersect FVector(10000.f,0.f,0.f)"));
-			}
-
-			if (ViewFrustum.IntersectPoint(FVector(-10000.f, 0.f, 0.f)))
-			{
-				UE_LOG(LogTemp, Warning, TEXT("intersect FVector(-10000.f,0.f,0.f)"));
-			}
-
-			if (ViewFrustum.IntersectPoint(FVector(0.f, 10000.f, 0.f)))
-			{
-				UE_LOG(LogTemp, Warning, TEXT("intersect FVector(0.f, 10000.f, 0.f)"));
-			}
-
-			if (ViewFrustum.IntersectPoint(FVector(0.f, -10000.f, 0.f)))
-			{
-				UE_LOG(LogTemp, Warning, TEXT("intersect FVector(0.f, -10000.f, 0.f)"));
-			}
-		}
-		*/
 	}
 }
 
@@ -1370,7 +1341,6 @@ void AGeometryClipMapWorld::ProcessSpawnablePending()
 			FVector MesgLoc = Mesh.Location;
 			
 			const int NumOfVertex = Spawn.RT_Dim*Spawn.RT_Dim;
-
 			
 
 			// The idea is that if we use instanced meshes, their transform are computed in local space, while actors require world space			
@@ -1419,9 +1389,8 @@ void AGeometryClipMapWorld::ProcessSpawnablePending()
 			{
 				if (Spawn.SpawnType == ESpawnableType::Mesh)
 				for (int i = 0; i < Spawn.HIM_Mesh.Num(); i++)
-				{
-					//TODO why did i put a +1 here - that s wrong ?!					
-					Spawn.HIM_Mesh[i]->BatchUpdateInstancesTransforms(Mesh.InstanceOffset[i]/*+1*/,InstancesT[i],false,true);
+				{									
+					Spawn.HIM_Mesh[i]->BatchUpdateInstancesTransforms(Mesh.InstanceOffset[i],InstancesT[i],false,true);
 				}
 				else
 				{
@@ -1444,9 +1413,8 @@ void AGeometryClipMapWorld::ProcessSpawnablePending()
 								else
 								{
 									FActorSpawnParameters ActorSpawnParameters;
-									ActorSpawnParameters.ObjectFlags=RF_Transient;
+									ActorSpawnParameters.ObjectFlags=RF_Transient;									
 									
-									//SAL.SpawnedActors[FirstIndice + j] = GetWorld()->SpawnActorAbsolute(Spawn.Actors_Validated[i], T,ActorSpawnParameters);	
 									AActor* SpawnedActor = GetWorld()->SpawnActor(Spawn.Actors_Validated[i].Get(), &T, ActorSpawnParameters);
 									SAL.SpawnedActors[FirstIndice + j] = SpawnedActor;
 								}
@@ -1483,10 +1451,8 @@ void AGeometryClipMapWorld::ProcessSpawnablePending()
 							if (T.GetScale3D().X > 0.0001f)
 							{
 								FActorSpawnParameters ActorSpawnParameters;
-								ActorSpawnParameters.ObjectFlags = RF_Transient;								
-								
-								//SAL.SpawnedActors.Add(GetWorld()->SpawnActorAbsolute(Spawn.Actors_Validated[i], T,ActorSpawnParameters));
-								
+								ActorSpawnParameters.ObjectFlags = RF_Transient;				
+
 								AActor* SpawnedActor = GetWorld()->SpawnActor(Spawn.Actors_Validated[i].Get(), &T,ActorSpawnParameters);
 								SAL.SpawnedActors.Add(SpawnedActor);
 								
@@ -2440,7 +2406,7 @@ bool AGeometryClipMapWorld::UpdateSpawnable(int indice, bool MustBeInFrustum)
 			FSpawnableMeshElement& El = Spawn.SpawnablesElem[Spawn.UsedSpawnablesElem[i]];
 			FVector ToComp = (El.Location - LocRef) / Spawn.RegionWorldDimension;
 
-			if (FMath::Abs(ToComp.X) > 3.1f || FMath::Abs(ToComp.Y) > 3.1f)
+			if (FMath::Abs(ToComp.X) > Spawn.NumberRegionPerQuadrantSide+0.1f || FMath::Abs(ToComp.Y) > Spawn.NumberRegionPerQuadrantSide+0.1f)
 			{
 				Spawn.AvailableSpawnablesElem.Add(El.ID);
 				Spawn.UsedSpawnablesElem.RemoveAt(i);
@@ -2471,12 +2437,12 @@ bool AGeometryClipMapWorld::UpdateSpawnable(int indice, bool MustBeInFrustum)
 			return true;
 	}
 
-	for (int i = -3; i <= 3; i++)
+	for (int i = -Spawn.NumberRegionPerQuadrantSide; i <= Spawn.NumberRegionPerQuadrantSide; i++)
 	{
 		if (InterruptUpdate)
 			break;
 
-		for (int j = -3; j <= 3; j++)
+		for (int j = -Spawn.NumberRegionPerQuadrantSide; j <= Spawn.NumberRegionPerQuadrantSide; j++)
 		{
 
 			FIntVector LocMeshInt = FIntVector(CamX + i, CamY + j, 0);
