@@ -14,7 +14,6 @@
 	"CanContainContent": true,
 	"SupportedTargetPlatforms": [
 		"IOS",
-		"Win32",
 		"Win64",
 		"Mac",
 		"Android",
@@ -28,6 +27,12 @@
 			"Name": "ProceduralLandscape",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "ProceduralMeshComponent",
+			"Enabled": true
 		}
 	]
 }
