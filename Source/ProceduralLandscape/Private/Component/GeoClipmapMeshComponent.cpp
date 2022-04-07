@@ -100,7 +100,7 @@ public:
 
 static void ConvertProcMeshToDynMeshVertex(FDynamicMeshVertex& Vert, const FGeoCProcMeshVertex& ProcVert)
 {
-	Vert.Position = ProcVert.Position;
+	Vert.Position = FVector3f(ProcVert.Position);
 	Vert.Color = ProcVert.Color;
 	Vert.TextureCoordinate[0] = (FVector2f)ProcVert.UV0;
 	Vert.TextureCoordinate[1] = (FVector2f)ProcVert.UV1;
@@ -275,7 +275,7 @@ public:
 					ConvertProcMeshToDynMeshVertex(Vertex, ProcVert);
 
 					Section->VertexBuffers.PositionVertexBuffer.VertexPosition(i) = Vertex.Position;
-					Section->VertexBuffers.StaticMeshVertexBuffer.SetVertexTangents(i, Vertex.TangentX.ToFVector(), Vertex.GetTangentY(), Vertex.TangentZ.ToFVector());
+					Section->VertexBuffers.StaticMeshVertexBuffer.SetVertexTangents(i, Vertex.TangentX.ToFVector3f(), Vertex.GetTangentY(), Vertex.TangentZ.ToFVector3f());
 					Section->VertexBuffers.StaticMeshVertexBuffer.SetVertexUV(i, 0, Vertex.TextureCoordinate[0]);
 					Section->VertexBuffers.StaticMeshVertexBuffer.SetVertexUV(i, 1, Vertex.TextureCoordinate[1]);
 					Section->VertexBuffers.StaticMeshVertexBuffer.SetVertexUV(i, 2, Vertex.TextureCoordinate[2]);
@@ -1107,7 +1107,7 @@ bool UGeoClipmapMeshComponent::GetPhysicsTriMeshData(struct FTriMeshCollisionDat
 			// Copy vert data
 			for (int32 VertIdx = 0; VertIdx < Section.ProcVertexBuffer.Num(); VertIdx++)
 			{
-				CollisionData->Vertices.Add(Section.ProcVertexBuffer[VertIdx].Position);
+				CollisionData->Vertices.Add(FVector3f(Section.ProcVertexBuffer[VertIdx].Position));
 
 				// Copy UV if desired
 				if (bCopyUVs)
