@@ -11,6 +11,7 @@
 	"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/519f5dc62d714ba8b116e4763ba1e542",
 	"SupportURL": "",
 	"EngineVersion": "5.0",
+	"EnabledByDefault": false,
 	"CanContainContent": true,
 	"SupportedTargetPlatforms": [
 		"IOS",
